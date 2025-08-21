@@ -1,5 +1,5 @@
-datapath=/root/cqy/dataset/MAD-man/Person_1
-augpath=/root/cqy/dataset/dtd/images
+datapath=datasets/MAD-man/Person_1
+augpath=datasets/dtd/images
 classes=('carpet' 'grid' 'leather' 'tile' 'wood' 'bottle' 'cable' 'capsule' 'hazelnut' 'metal_nut' 'pill' 'screw' 'toothbrush' 'transistor' 'zipper')
 flags=($(for class in "${classes[@]}"; do echo '-d '"${class}"; done))
 
@@ -7,7 +7,7 @@ cd ..
 python main.py \
     --gpu 0 \
     --seed 0 \
-    --test test \
+    --test ckpt \
   net \
     -b wideresnet50 \
     -le layer2 \
