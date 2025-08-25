@@ -1,6 +1,6 @@
-datapath=/root/cqy/dataset/Custom
-augpath=/root/cqy/dataset/dtd/images
-classes=('class1' 'class2')
+datapath=/home/phatnguyen/Documents/repo/GLASS/datasets/HS0010/
+augpath=datasets/dtd/images
+classes=('OP2')
 flags=($(for class in "${classes[@]}"; do echo '-d '"${class}"; done))
 
 cd ..
@@ -32,6 +32,6 @@ python main.py \
     --std 0.1 \
     --fg 0 \
     --rand_aug 1 \
-    --batch_size 8 \
-    --resize 288 \
-    --imagesize 288 "${flags[@]}" mvtec $datapath $augpath
+    --batch_size 4 \
+    --resize 576 \
+    --imagesize 576 "${flags[@]}" mvtec $datapath $augpath
