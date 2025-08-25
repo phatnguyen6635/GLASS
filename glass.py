@@ -3,6 +3,8 @@ from collections import OrderedDict
 from torchvision import transforms
 from torch.utils.tensorboard import SummaryWriter
 from model import Discriminator, Projection, PatchMaker
+from sklearn.metrics import roc_curve
+import PIL
 
 import numpy as np
 import pandas as pd
@@ -53,7 +55,7 @@ class GLASS(torch.nn.Module):
             eval_epochs=1,
             dsc_layers=2,
             dsc_hidden=1024,
-            dsc_margin=0.5,
+            dsc_margin=0.1,
             train_backbone=False,
             pre_proj=1,
             mining=1,
@@ -123,8 +125,8 @@ class GLASS(torch.nn.Module):
         self.model_dir = ""
         self.dataset_name = ""
         self.logger = None
-
-    def set_model_dir(self, model_dir, dataset_name):
+        
+    def set_model_dir(self, model_dir, dataset_name): # models_dir = ../backbones, dataset_name = dataset_subdataset
         self.model_dir = model_dir
         os.makedirs(self.model_dir, exist_ok=True)
         self.ckpt_dir = os.path.join(self.model_dir, dataset_name)
@@ -132,6 +134,62 @@ class GLASS(torch.nn.Module):
         self.tb_dir = os.path.join(self.ckpt_dir, "tb")
         os.makedirs(self.tb_dir, exist_ok=True)
         self.logger = TBWrapper(self.tb_dir)
+        
+    def compute_image_tpr_tnr(self, scores, labels_gt, threshold=0.5):
+
+        scores = np.array(scores)
+        labels_gt = np.array(labels_gt)
+        
+        # Convert scores to binary predictions using threshold
+        predictions = (scores > threshold).astype(int)
+        
+        # Calculate confusion matrix components
+        tp = np.sum((predictions == 1) & (labels_gt == 1))
+        fp = np.sum((predictions == 1) & (labels_gt == 0))
+        tn = np.sum((predictions == 0) & (labels_gt == 0))
+        fn = np.sum((predictions == 0) & (labels_gt == 1))
+        
+        # Calculate TPR & TNR (Sensitivity & Specificity)
+        tpr = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+        tnr = tn / (tn + fp) if (tn + fp) > 0 else 0.0
+           
+        return {
+            "tpr": tpr,
+            "tnr": tnr,
+            "tp": tp,
+            "fp": fp,
+            "tn": tn,
+            "fn": fn
+        }
+
+    def compute_optimal_threshold_metrics(self, scores, labels_gt):
+
+        scores = np.array(scores)
+        labels_gt = np.array(labels_gt)
+        
+        # Get ROC curve
+        fpr_curve, tpr_curve, thresholds = roc_curve(labels_gt, scores)
+        
+        max_tpr = np.max(tpr_curve)
+        mask = tpr_curve == max_tpr
+
+        fpr_candidates = fpr_curve[mask]
+        threshold_candidates = thresholds[mask]
+
+                
+        best_idx = np.argmin(fpr_candidates)
+        best_threshold = threshold_candidates[best_idx]
+        best_fpr = fpr_candidates[best_idx]
+                
+        # Get detailed metrics at optimal threshold
+        detailed_metrics = self.compute_image_tpr_tnr(scores, labels_gt, best_threshold)
+        
+        return {
+            "optimal_threshold": best_threshold,
+            "optimal_tpr": max_tpr,
+            "optimal_fpr": best_fpr,
+            **detailed_metrics
+        }
 
     def _embed(self, images, detach=True, provide_patch_shapes=False, evaluation=False):
         """Returns feature embeddings for images."""
@@ -193,7 +251,7 @@ class GLASS(torch.nn.Module):
             LOGGER.info("Start testing, ckpt file found!")
             return 0., 0., 0., 0., 0., -1.
 
-        def update_state_dict():
+        def update_state_dict(): # save weight model
             state_dict["discriminator"] = OrderedDict({
                 k: v.detach().cpu()
                 for k, v in self.discriminator.state_dict().items()})
@@ -515,10 +573,11 @@ class GLASS(torch.nn.Module):
             pixel_pro = -1.
             return image_auroc, image_ap, pixel_auroc, pixel_ap, pixel_pro
 
-        defects = np.array(images)
+        defects = images
+        print(defects[1])
         targets = np.array(masks_gt)
         for i in range(len(defects)):
-            defect = utils.torch_format_2_numpy_img(defects[i])
+            defect = utils.torch_format_2_numpy_img(PIL.Image.open(defects[i]).convert('RGB'))
             target = utils.torch_format_2_numpy_img(targets[i])
 
             mask = cv2.cvtColor(cv2.resize(segmentations[i], (defect.shape[1], defect.shape[0])),
@@ -527,7 +586,7 @@ class GLASS(torch.nn.Module):
             mask = cv2.applyColorMap(mask, cv2.COLORMAP_JET)
 
             img_up = np.hstack([defect, target, mask])
-            img_up = cv2.resize(img_up, (256 * 3, 256))
+            img_up = cv2.resize(img_up, (576 * 3, 576))
             full_path = './results/' + path + '/' + name + '/'
             utils.del_remake_dir(full_path, del_flag=False)
             cv2.imwrite(full_path + str(i + 1).zfill(3) + '.png', img_up)
@@ -539,12 +598,11 @@ class GLASS(torch.nn.Module):
         self.forward_modules.eval()
 
         img_paths = []
-        images = []
+        # images = []
         scores = []
         masks = []
         labels_gt = []
         masks_gt = []
-
         with tqdm.tqdm(test_dataloader, desc="Inferring...", leave=False, unit='batch') as data_iterator:
             for data in data_iterator:
                 if isinstance(data, dict):
@@ -552,14 +610,14 @@ class GLASS(torch.nn.Module):
                     if data.get("mask_gt", None) is not None:
                         masks_gt.extend(data["mask_gt"].numpy().tolist())
                     image = data["image"]
-                    images.extend(image.numpy().tolist())
+                    # images.extend(image.numpy().tolist())
                     img_paths.extend(data["image_path"])
                 _scores, _masks = self._predict(image)
                 for score, mask in zip(_scores, _masks):
                     scores.append(score)
                     masks.append(mask)
 
-        return images, scores, masks, labels_gt, masks_gt
+        return img_paths, scores, masks, labels_gt, masks_gt
 
     def _predict(self, img):
         """Infer score and mask for a batch of images."""
