@@ -572,12 +572,17 @@ class GLASS(torch.nn.Module):
             pixel_ap = -1.
             pixel_pro = -1.
             return image_auroc, image_ap, pixel_auroc, pixel_ap, pixel_pro
+        
+        results = self.compute_optimal_threshold_metrics(scores, labels_gt)
+        LOGGER.info(f"Optimal threshold for {name}: {results['optimal_threshold']:.42f}, "
+                    f"optimal_tpr: {results['optimal_tpr']*100:.2f}%, optimal_fpr: {results['optimal_fpr']*100:.2f}%, "
+                    f"TPR: {results['tpr']*100:.2f}%, TNR: {results['tnr']*100:.2f}%, "
+                    f"TP: {results['tp']}, FP: {results['fp']}, TN: {results['tn']}, FN: {results['fn']}")
 
         defects = images
-        print(defects[1])
         targets = np.array(masks_gt)
         for i in range(len(defects)):
-            defect = utils.torch_format_2_numpy_img(PIL.Image.open(defects[i]).convert('RGB'))
+            defect = utils.torch_format_2_numpy_img(np.array(self.transform_img(PIL.Image.open(defects[i]).convert('RGB')).numpy().tolist()))
             target = utils.torch_format_2_numpy_img(targets[i])
 
             mask = cv2.cvtColor(cv2.resize(segmentations[i], (defect.shape[1], defect.shape[0])),
@@ -603,6 +608,7 @@ class GLASS(torch.nn.Module):
         masks = []
         labels_gt = []
         masks_gt = []
+        self.transform_img = test_dataloader.dataset.transform_img
         with tqdm.tqdm(test_dataloader, desc="Inferring...", leave=False, unit='batch') as data_iterator:
             for data in data_iterator:
                 if isinstance(data, dict):
