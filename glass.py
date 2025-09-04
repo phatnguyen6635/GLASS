@@ -55,7 +55,7 @@ class GLASS(torch.nn.Module):
             eval_epochs=1,
             dsc_layers=2,
             dsc_hidden=1024,
-            dsc_margin=0.1,
+            dsc_margin=0.5,
             train_backbone=False,
             pre_proj=1,
             mining=1,
@@ -126,6 +126,13 @@ class GLASS(torch.nn.Module):
         self.dataset_name = ""
         self.logger = None
         
+        # # Load state dict
+        # checkpoint = torch.load('/home/phatnguyen/Documents/repo/GLASS/results/models/backbone_0/mvtec_OP2/best.pth', map_location=device)
+
+        # self.discriminator.load_state_dict(checkpoint["discriminator"])
+
+        # self.pre_projection.load_state_dict(checkpoint["pre_projection"])
+        
     def set_model_dir(self, model_dir, dataset_name): # models_dir = ../backbones, dataset_name = dataset_subdataset
         self.model_dir = model_dir
         os.makedirs(self.model_dir, exist_ok=True)
@@ -135,7 +142,7 @@ class GLASS(torch.nn.Module):
         os.makedirs(self.tb_dir, exist_ok=True)
         self.logger = TBWrapper(self.tb_dir)
         
-    def compute_image_tpr_tnr(self, scores, labels_gt, threshold=0.5):
+    def compute_image_tpr_tnr(self, scores, labels_gt, threshold=0.8):
 
         scores = np.array(scores)
         labels_gt = np.array(labels_gt)
@@ -420,7 +427,7 @@ class GLASS(torch.nn.Module):
 
                 if step == self.step:
                     break
-                elif self.mining == 0:
+                elif self.mining == 0:  
                     dist_g = torch.norm(gaus_feats - center, dim=1)
                     r_g = torch.tensor([torch.quantile(dist_g, q=self.radius)]).to(self.device)
                     break
@@ -522,6 +529,10 @@ class GLASS(torch.nn.Module):
             pbar_str2 = pbar_str
             pbar_str += pbar_str1
             pbar.set_description_str(pbar_str)
+            
+            # For training full training set
+            if self.limit == -1:
+                continue
 
             if sample_num > self.limit:
                 break
@@ -529,6 +540,7 @@ class GLASS(torch.nn.Module):
         return pbar_str2, all_p_true_, all_p_fake_
 
     def tester(self, test_data, name):
+        test_dict = {}
         ckpt_path = glob.glob(self.ckpt_dir + '/ckpt_best*')
         if len(ckpt_path) != 0:
             state_dict = torch.load(ckpt_path[0], map_location=self.device)
@@ -540,6 +552,11 @@ class GLASS(torch.nn.Module):
                 self.load_state_dict(state_dict, strict=False)
 
             images, scores, segmentations, labels_gt, masks_gt = self.predict(test_data)
+            # for i in range(len(images)):
+            #     test_dict[images[i]] = [scores[i].tolist(), labels_gt[i]]
+            # import json
+            # with open(os.path.join(self.ckpt_dir, "test_scores.json"), 'w') as f:
+            #     json.dump(test_dict, f)
             image_auroc, image_ap, pixel_auroc, pixel_ap, pixel_pro = self._evaluate(images, scores, segmentations,
                                                                                      labels_gt, masks_gt, name, path='eval')
             epoch = int(ckpt_path[0].split('_')[-1].split('.')[0])
