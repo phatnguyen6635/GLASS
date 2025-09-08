@@ -184,7 +184,7 @@ class MVTecDataset(torch.utils.data.Dataset):
                 aug = self.transform_img(aug)
 
             if self.class_fg:
-                fgmask_path = image_path.split(classname)[0] + 'fg_mask/' + classname + '/' + os.path.split(image_path)[-1]
+                fgmask_path = image_path.split(classname)[0] + 'fg_mask/' + classname + '/' + os.path.split(image_path)[-1] # dataset/fg_mask/class/
                 mask_fg = PIL.Image.open(fgmask_path)
                 mask_fg = torch.ceil(self.transform_mask(mask_fg)[0])
 
@@ -218,15 +218,15 @@ class MVTecDataset(torch.utils.data.Dataset):
         imgpaths_per_class = {}
         maskpaths_per_class = {}
 
-        classpath = os.path.join(self.source, self.classname, self.split.value)
-        maskpath = os.path.join(self.source, self.classname, "ground_truth")
-        anomaly_types = os.listdir(classpath)
+        classpath = os.path.join(self.source, self.classname, self.split.value) # dataset/class/train
+        maskpath = os.path.join(self.source, self.classname, "ground_truth") # dataset/class/ground_truth
+        anomaly_types = os.listdir(classpath) # good, crack, etc.
 
         imgpaths_per_class[self.classname] = {}
         maskpaths_per_class[self.classname] = {}
 
         for anomaly in anomaly_types:
-            anomaly_path = os.path.join(classpath, anomaly)
+            anomaly_path = os.path.join(classpath, anomaly) # dataset/class/train/good
             anomaly_files = sorted(os.listdir(anomaly_path))
             imgpaths_per_class[self.classname][anomaly] = [os.path.join(anomaly_path, x) for x in anomaly_files]
 
