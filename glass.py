@@ -47,24 +47,24 @@ class GLASS(torch.nn.Module):
             layers_to_extract_from,
             device,
             input_shape,
-            pretrain_embed_dimension,
-            target_embed_dimension,
-            patchsize=3,
-            patchstride=1,
+            pretrain_embed_dimension, # Convert output dimension from backbone model to pretrain_embed_dimension
+            target_embed_dimension, # Conver all feature extracted from all layer target_embed_dimension
+            patchsize=3, # Patchsize after pachify
+            patchstride=1, # Stride
             meta_epochs=640,
             eval_epochs=1,
-            dsc_layers=2,
-            dsc_hidden=1024,
-            dsc_margin=0.5,
+            dsc_layers=2, # Discriminator layer
+            dsc_hidden=1024, # Discriminator hidden layer
+            dsc_margin=0.5, # Discriminator threshold
             train_backbone=False,
             pre_proj=1,
-            mining=1,
+            mining=1, # Using LAS or not
             noise=0.015,
-            radius=0.75,
-            p=0.5,
+            radius=0.75, # Quantile for mainfold or hyperpherse, 75% normal sample are selected
+            p=0.5, # Quantile for hard mining 50% hard sameple are selected
             lr=0.0001,
             svd=0,
-            step=20,
+            step=20, # Update Gaussian ascent 20 steps after 1 batch training
             limit=392,
             **kwargs,
     ):
@@ -186,6 +186,7 @@ class GLASS(torch.nn.Module):
                 
         best_idx = np.argmin(fpr_candidates)
         best_threshold = threshold_candidates[best_idx]
+        best_threshold = 0.5
         best_fpr = fpr_candidates[best_idx]
                 
         # Get detailed metrics at optimal threshold
@@ -552,11 +553,11 @@ class GLASS(torch.nn.Module):
                 self.load_state_dict(state_dict, strict=False)
 
             images, scores, segmentations, labels_gt, masks_gt = self.predict(test_data)
-            # for i in range(len(images)):
-            #     test_dict[images[i]] = [scores[i].tolist(), labels_gt[i]]
-            # import json
-            # with open(os.path.join(self.ckpt_dir, "test_scores.json"), 'w') as f:
-            #     json.dump(test_dict, f)
+            for i in range(len(images)):
+                test_dict[images[i]] = [str(i + 1).zfill(3),scores[i].tolist(), labels_gt[i]]
+            import json
+            with open(os.path.join(self.ckpt_dir, "test_scores.json"), 'w') as f:
+                json.dump(test_dict, f)
             image_auroc, image_ap, pixel_auroc, pixel_ap, pixel_pro = self._evaluate(images, scores, segmentations,
                                                                                      labels_gt, masks_gt, name, path='eval')
             epoch = int(ckpt_path[0].split('_')[-1].split('.')[0])
