@@ -1,6 +1,6 @@
-datapath=/home/phatnguyen/Documents/repo/GLASS/datasets/HS0010/
+datapath=/media/phatnguyen/RD/PHAT_DATA/augumentaion/
 augpath=datasets/dtd/images
-classes=('OP2')
+classes=('OP2_1')
 flags=($(for class in "${classes[@]}"; do echo '-d '"${class}"; done))
 
 cd ..
@@ -15,7 +15,7 @@ python main.py \
     --pretrain_embed_dimension 1536 \
     --target_embed_dimension 1536 \
     --patchsize 3 \
-    --meta_epochs 640 \
+    --meta_epochs 100 \
     --eval_epochs 1 \
     --dsc_layers 2 \
     --dsc_hidden 1024 \
@@ -25,12 +25,12 @@ python main.py \
     --radius 0.75 \
     --p 0.5 \
     --step 20 \
-    --limit 392 \
+    --limit -1 \
   dataset \
     --distribution 2 \
     --mean 0.5 \
     --std 0.1 \
-    --fg 0 \
+    --fg 1 \
     --rand_aug 1 \
     --batch_size 4 \
     --resize 576 \
