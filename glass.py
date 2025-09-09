@@ -255,6 +255,8 @@ class GLASS(torch.nn.Module):
         state_dict = {}
         ckpt_path = glob.glob(self.ckpt_dir + '/ckpt_best*')
         ckpt_path_save = os.path.join(self.ckpt_dir, "ckpt.pth")
+        self.transform_img = training_data.dataset.transform_img
+
         if len(ckpt_path) != 0:
             LOGGER.info("Start testing, ckpt file found!")
             return 0., 0., 0., 0., 0., -1.
@@ -359,7 +361,8 @@ class GLASS(torch.nn.Module):
                     shutil.rmtree(eval_path, ignore_errors=True)
                     shutil.copytree(train_path, eval_path)
 
-                elif image_auroc + pixel_auroc > best_record[0] + best_record[2]:
+                # elif image_auroc + pixel_auroc > best_record[0] + best_record[2]:
+                elif image_auroc > best_record[0]: # Using ImageAUROC
                     best_record = [image_auroc, image_ap, pixel_auroc, pixel_ap, pixel_pro, i_epoch]
                     os.remove(ckpt_path_best)
                     ckpt_path_best = os.path.join(self.ckpt_dir, "ckpt_best_{}.pth".format(i_epoch))
@@ -393,6 +396,8 @@ class GLASS(torch.nn.Module):
                 self.proj_opt.zero_grad()
 
             aug = data_item["aug"]
+            # aug_image = aug[0]
+            # cv2.imwrite(f"/home/phatnguyen/Documents/repo/GLASS/aug/{cur_epoch}_{i_iter}.png", utils.torch_format_2_numpy_img(np.array(aug_image)))
             aug = aug.to(torch.float).to(self.device)
             img = data_item["image"]
             img = img.to(torch.float).to(self.device)
@@ -626,7 +631,6 @@ class GLASS(torch.nn.Module):
         masks = []
         labels_gt = []
         masks_gt = []
-        self.transform_img = test_dataloader.dataset.transform_img
         with tqdm.tqdm(test_dataloader, desc="Inferring...", leave=False, unit='batch') as data_iterator:
             for data in data_iterator:
                 if isinstance(data, dict):
