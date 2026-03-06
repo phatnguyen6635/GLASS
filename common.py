@@ -90,7 +90,7 @@ class NetworkFeatureAggregator(torch.nn.Module):
         self.outputs = {}
 
         for extract_layer in layers_to_extract_from:
-            self.register_hook(extract_layer)
+            self.register_hook(extract_layer) # register hook for layer extractor
 
         self.to(self.device)
 
@@ -113,7 +113,7 @@ class NetworkFeatureAggregator(torch.nn.Module):
         return [_output[layer].shape[1] for layer in self.layers_to_extract_from]
 
     def register_hook(self, layer_name):
-        module = self.find_module(self.backbone, layer_name)
+        module = self.find_module(self.backbone, layer_name) # return layer which'name is layer_name 
         if module is not None:
             forward_hook = ForwardHook(self.outputs, layer_name, self.layers_to_extract_from[-1])
             if isinstance(module, torch.nn.Sequential):
@@ -140,7 +140,8 @@ class ForwardHook:
         self.layer_name = layer_name
         self.raise_exception_to_break = copy.deepcopy(
             layer_name == last_layer_to_extract
-        )
+        ) # Create a completely independent copy of the object
+        # Not really need
 
     def __call__(self, module, input, output):
         self.hook_dict[self.layer_name] = output

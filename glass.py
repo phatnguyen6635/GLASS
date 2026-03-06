@@ -72,13 +72,13 @@ class GLASS(torch.nn.Module):
         self.input_shape = input_shape
         self.device = device
 
-        self.forward_modules = torch.nn.ModuleDict({})
+        self.forward_modules = torch.nn.ModuleDict({}) # Like dict()
         feature_aggregator = common.NetworkFeatureAggregator(
             self.backbone, self.layers_to_extract_from, self.device, train_backbone
-        )
+        ) # Read comment from fuction to understand
         feature_dimensions = feature_aggregator.feature_dimensions(input_shape)
         self.forward_modules["feature_aggregator"] = feature_aggregator
-
+        ###
         preprocessing = common.Preprocessing(feature_dimensions, pretrain_embed_dimension)
         self.forward_modules["preprocessing"] = preprocessing
         self.target_embed_dimension = target_embed_dimension

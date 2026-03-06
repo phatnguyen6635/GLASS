@@ -85,7 +85,7 @@ class MVTecDataset(torch.utils.data.Dataset):
                    mvtec.DatasetSplit.TEST will also load mask data.
         """
         super().__init__()
-        self.source = source
+        self.source = source # data_path
         self.split = split
         self.batch_size = batch_size
         self.distribution = distribution
@@ -218,9 +218,9 @@ class MVTecDataset(torch.utils.data.Dataset):
         imgpaths_per_class = {}
         maskpaths_per_class = {}
 
-        classpath = os.path.join(self.source, self.classname, self.split.value)
-        maskpath = os.path.join(self.source, self.classname, "ground_truth")
-        anomaly_types = os.listdir(classpath)
+        classpath = os.path.join(self.source, self.classname, self.split.value) # dataset/class_name/train
+        maskpath = os.path.join(self.source, self.classname, "ground_truth") # dataset/class_name/ground_truth
+        anomaly_types = os.listdir(classpath) # good, crack, etc.
 
         imgpaths_per_class[self.classname] = {}
         maskpaths_per_class[self.classname] = {}
@@ -249,3 +249,28 @@ class MVTecDataset(torch.utils.data.Dataset):
                     data_to_iterate.append(data_tuple)
 
         return imgpaths_per_class, data_to_iterate
+    
+# imgpaths_per_class =
+# {
+#    "bottle":
+#    {
+#       "good": [
+#          "dataset/bottle/test/good/000.png",
+#          "dataset/bottle/test/good/001.png"
+#       ],
+
+#       "crack": [
+#          "dataset/bottle/test/crack/000.png",
+#          "dataset/bottle/test/crack/001.png"
+#       ]
+#    }
+# }
+# data_to_iterate = 
+# [
+#  ['bottle','good','dataset/bottle/test/good/000.png', None],
+
+#  ['bottle','good','dataset/bottle/test/good/001.png', None],
+
+#  ['bottle','crack','dataset/bottle/test/crack/000.png',
+#   'dataset/bottle/ground_truth/crack/000_mask.png']
+# ]

@@ -67,14 +67,13 @@ def net(
         step,
         limit,
 ):
-    backbone_names = list(backbone_names)
+    backbone_names = list(backbone_names) # [wideresnet50]
     if len(backbone_names) > 1:
         layers_to_extract_from_coll = []
         for idx in range(len(backbone_names)):
             layers_to_extract_from_coll.append(layers_to_extract_from)
     else:
-        layers_to_extract_from_coll = [layers_to_extract_from]
-
+        layers_to_extract_from_coll = [layers_to_extract_from] # [layer2, layer3]
     def get_glass(input_shape, device):
         glasses = []
         for backbone_name, layers_to_extract_from in zip(backbone_names, layers_to_extract_from_coll):
@@ -168,8 +167,8 @@ def dataset(
 ):
     _DATASETS = {"mvtec": ["datasets.mvtec", "MVTecDataset"], "visa": ["datasets.visa", "VisADataset"],
                  "mpdd": ["datasets.mvtec", "MVTecDataset"], "wfdd": ["datasets.mvtec", "MVTecDataset"], }
-    dataset_info = _DATASETS[name]
-    dataset_library = __import__(dataset_info[0], fromlist=[dataset_info[1]])
+    dataset_info = _DATASETS[name] # name = 'mvtec'
+    dataset_library = __import__(dataset_info[0], fromlist=[dataset_info[1]]) # import dataset_info[0].dataset_info[1]
 
     def get_dataloaders(seed, test, get_name=name):
         dataloaders = []
@@ -182,7 +181,7 @@ def dataset(
                 imagesize=imagesize,
                 split=dataset_library.DatasetSplit.TEST,
                 seed=seed,
-            )
+            ) # dataset_library.__dict__[dataset_info[1]]: MVTecDataset
 
             test_dataloader = torch.utils.data.DataLoader(
                 test_dataset,
@@ -280,7 +279,6 @@ def run(
         dataset_name = dataloaders["training"].name
         imagesize = dataloaders["training"].dataset.imagesize
         glass_list = methods["get_glass"](imagesize, device)
-
         LOGGER.info(
             "Selecting dataset [{}] ({}/{}) {}".format(
                 dataset_name,
