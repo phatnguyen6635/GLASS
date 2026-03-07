@@ -154,7 +154,7 @@ class MVTecDataset(torch.utils.data.Dataset):
             transforms.RandomEqualize(p=1),
             transforms.RandomAffine(degrees=(-45, 45)),
         ]
-        aug_idx = np.random.choice(np.arange(len(list_aug)), 3, replace=False)
+        aug_idx = np.random.choice(np.arange(len(list_aug)), 3, replace=False) # Random choice 3 idx
 
         transform_aug = [
             transforms.Resize(self.resize),
@@ -197,7 +197,7 @@ class MVTecDataset(torch.utils.data.Dataset):
             aug_image = image * (1 - mask_l) + (1 - beta) * aug * mask_l + beta * image * mask_l
 
         if self.split == DatasetSplit.TEST and mask_path is not None:
-            mask_gt = PIL.Image.open(mask_path).convert('L')
+            mask_gt = PIL.Image.open(mask_path).convert('L') # convert to grayscale
             mask_gt = self.transform_mask(mask_gt)
         else:
             mask_gt = torch.zeros([1, *image.size()[1:]])
@@ -219,7 +219,7 @@ class MVTecDataset(torch.utils.data.Dataset):
         maskpaths_per_class = {}
 
         classpath = os.path.join(self.source, self.classname, self.split.value) # dataset/class_name/train
-        maskpath = os.path.join(self.source, self.classname, "ground_truth") # dataset/class_name/ground_truth
+        maskpath = os.path.join(self.source, self.classname, "ground_truth") # dataset/class_name/ground_truth: mask anomaly
         anomaly_types = os.listdir(classpath) # good, crack, etc.
 
         imgpaths_per_class[self.classname] = {}
@@ -230,7 +230,7 @@ class MVTecDataset(torch.utils.data.Dataset):
             anomaly_files = sorted(os.listdir(anomaly_path))
             imgpaths_per_class[self.classname][anomaly] = [os.path.join(anomaly_path, x) for x in anomaly_files]
 
-            if self.split == DatasetSplit.TEST and anomaly != "good":
+            if self.split == DatasetSplit.TEST and anomaly != "good": # only TEST will have anomaly_mask_path
                 anomaly_mask_path = os.path.join(maskpath, anomaly)
                 anomaly_mask_files = sorted(os.listdir(anomaly_mask_path))
                 maskpaths_per_class[self.classname][anomaly] = [os.path.join(anomaly_mask_path, x) for x in anomaly_mask_files]
@@ -250,27 +250,61 @@ class MVTecDataset(torch.utils.data.Dataset):
 
         return imgpaths_per_class, data_to_iterate
     
-# imgpaths_per_class =
-# {
-#    "bottle":
-#    {
-#       "good": [
-#          "dataset/bottle/test/good/000.png",
-#          "dataset/bottle/test/good/001.png"
-#       ],
-
-#       "crack": [
-#          "dataset/bottle/test/crack/000.png",
-#          "dataset/bottle/test/crack/001.png"
-#       ]
-#    }
+# imgpaths_per_class = {
+#     "bottle": {
+#         "good": [
+#             "dataset/bottle/test/good/000.png",
+#             "dataset/bottle/test/good/001.png"
+#         ],
+#         "crack": [
+#             "dataset/bottle/test/crack/000.png",
+#             "dataset/bottle/test/crack/001.png"
+#         ]
+#     }
 # }
-# data_to_iterate = 
-# [
-#  ['bottle','good','dataset/bottle/test/good/000.png', None],
 
-#  ['bottle','good','dataset/bottle/test/good/001.png', None],
+# maskpaths_per_class = {
+#     "bottle": {
+#         "crack": [
+#             "dataset/bottle/ground_truth/crack/000_mask.png",
+#             "dataset/bottle/ground_truth/crack/001_mask.png"
+#         ],
+#         "good": None
+#     }
+# }
 
-#  ['bottle','crack','dataset/bottle/test/crack/000.png',
-#   'dataset/bottle/ground_truth/crack/000_mask.png']
+# data_to_iterate = [
+
+#  ['bottle', 'good',
+#   'dataset/bottle/test/good/000.png',
+#   None],
+
+#  ['bottle', 'good',
+#   'dataset/bottle/test/good/001.png',
+#   None],
+
+#  ['bottle', 'crack',
+#   'dataset/bottle/test/crack/000.png',
+#   'dataset/bottle/ground_truth/crack/000_mask.png'],
+
+#  ['bottle', 'crack',
+#   'dataset/bottle/test/crack/001.png',
+#   'dataset/bottle/ground_truth/crack/001_mask.png']
 # ]
+
+
+# dataset/
+#  ├── bottle
+#  │    ├── train
+#  │    │     └── good
+#  │    │          ├── 000.png
+#  │    │          └── 001.png
+#  │    ├── test
+#  │    │     ├── good
+#  │    │     └── crack
+#  │    │          ├── 000.png
+#  │    │          └── 001.png
+#  │    └── ground_truth
+#  │          └── crack
+#  │               ├── 000_mask.png
+#  │               └── 001_mask.png

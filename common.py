@@ -29,8 +29,8 @@ class MeanMapper(torch.nn.Module):
         self.preprocessing_dim = preprocessing_dim
 
     def forward(self, features):
-        features = features.reshape(len(features), 1, -1)
-        return F.adaptive_avg_pool1d(features, self.preprocessing_dim).squeeze(1)
+        features = features.reshape(len(features), 1, -1) # (N, 1, dim)
+        return F.adaptive_avg_pool1d(features, self.preprocessing_dim).squeeze(1) # (N, preprocessing_dim)
 
 
 class Aggregator(torch.nn.Module):
@@ -40,9 +40,9 @@ class Aggregator(torch.nn.Module):
 
     def forward(self, features):
         """Returns reshaped and average pooled features."""
-        features = features.reshape(len(features), 1, -1)
-        features = F.adaptive_avg_pool1d(features, self.target_dim)
-        return features.reshape(len(features), -1)
+        features = features.reshape(len(features), 1, -1) #(N, 1, dim)
+        features = F.adaptive_avg_pool1d(features, self.target_dim) # (N, 1, target_dim)
+        return features.reshape(len(features), -1) # (N, target_dim)
 
 
 class RescaleSegmentor:
@@ -110,10 +110,10 @@ class NetworkFeatureAggregator(torch.nn.Module):
         """Computes the feature dimensions for all layers given input_shape."""
         _input = torch.ones([1] + list(input_shape)).to(self.device)
         _output = self(_input)
-        return [_output[layer].shape[1] for layer in self.layers_to_extract_from]
+        return [_output[layer].shape[1] for layer in self.layers_to_extract_from] # Get the channel in each layer.
 
     def register_hook(self, layer_name):
-        module = self.find_module(self.backbone, layer_name) # return layer which'name is layer_name 
+        module = self.find_module(self.backbone, layer_name) # return layer which'name is layer_name. ex: 100, 200
         if module is not None:
             forward_hook = ForwardHook(self.outputs, layer_name, self.layers_to_extract_from[-1])
             if isinstance(module, torch.nn.Sequential):

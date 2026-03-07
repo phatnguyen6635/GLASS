@@ -69,7 +69,7 @@ class GLASS(torch.nn.Module):
 
         self.backbone = backbone.to(device)
         self.layers_to_extract_from = layers_to_extract_from
-        self.input_shape = input_shape
+        self.input_shape = input_shape # [3, 288, 288]
         self.device = device
 
         self.forward_modules = torch.nn.ModuleDict({}) # Like dict()
@@ -78,7 +78,6 @@ class GLASS(torch.nn.Module):
         ) # Read comment from fuction to understand
         feature_dimensions = feature_aggregator.feature_dimensions(input_shape)
         self.forward_modules["feature_aggregator"] = feature_aggregator
-        ###
         preprocessing = common.Preprocessing(feature_dimensions, pretrain_embed_dimension)
         self.forward_modules["preprocessing"] = preprocessing
         self.target_embed_dimension = target_embed_dimension

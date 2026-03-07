@@ -42,7 +42,7 @@ def perlin_mask(img_shape, feat_size, min, max, mask_fg, flag=0):
     if flag == 0:
         return mask_s
     else:
-        return mask_s, mask_l
+        return mask_s, mask_l # [H, W] --> maxpool --> [feat_size, feat_size], [H, W]
 
 
 def lerp_np(x, y, w):

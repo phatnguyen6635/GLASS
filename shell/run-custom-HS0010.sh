@@ -26,12 +26,13 @@ python main.py \
     --p 0.5 \
     --step 20 \
     --limit 392 \
-  # dataset \
-  #   --distribution 2 \
-  #   --mean 0.5 \
-  #   --std 0.1 \
-  #   --fg 0 \
-  #   --rand_aug 1 \
-  #   --batch_size 8 \
-  #   --resize 288 \
-  #   --imagesize 288 "${flags[@]}" mvtec $datapath $augpath
+  dataset \
+    --distribution 2 \
+    --mean 0.5 \
+    --std 0.1 \
+    --fg 0 \
+    --rand_aug 1 \
+    --batch_size 8 \
+    --resize 288 \
+    --imagesize 288 "${flags[@]}" mvtec $datapath $augpath
+# --imagesize 288 -d class1 -d class2 mvtec $datapath $augpath
