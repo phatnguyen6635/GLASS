@@ -189,8 +189,8 @@ class MVTecDataset(torch.utils.data.Dataset):
                 mask_fg = torch.ceil(self.transform_mask(mask_fg)[0])
 
             mask_all = perlin_mask(image.shape, self.imgsize // self.downsampling, 0, 6, mask_fg, 1)
-            mask_s = torch.from_numpy(mask_all[0])
-            mask_l = torch.from_numpy(mask_all[1])
+            mask_s = torch.from_numpy(mask_all[0]) # [feat_size, feat_size]
+            mask_l = torch.from_numpy(mask_all[1]) # 
 
             beta = np.random.normal(loc=self.mean, scale=self.std)
             beta = np.clip(beta, .2, .8)

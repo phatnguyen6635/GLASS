@@ -78,13 +78,13 @@ class PatchMaker:
         unfolder = torch.nn.Unfold(kernel_size=self.patchsize, stride=self.stride, padding=padding, dilation=1)
         unfolded_features = unfolder(features)
         number_of_total_patches = []
-        for s in features.shape[-2:]:
+        for s in features.shape[-2:]: # Get (w, h)
             n_patches = (s + 2 * padding - 1 * (self.patchsize - 1) - 1) / self.stride + 1
-            number_of_total_patches.append(int(n_patches))
+            number_of_total_patches.append(int(n_patches)) # [n_patch_h, n_patch_w]
         unfolded_features = unfolded_features.reshape(
             *features.shape[:2], self.patchsize, self.patchsize, -1
-        )
-        unfolded_features = unfolded_features.permute(0, 4, 1, 2, 3)
+        ) # [B, C, patchsize, patchsize, N_patches]
+        unfolded_features = unfolded_features.permute(0, 4, 1, 2, 3) # [B, N_patches, C, patchsize, patchsize]
 
         if return_spatial_info:
             return unfolded_features, number_of_total_patches

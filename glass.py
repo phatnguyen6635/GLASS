@@ -76,7 +76,7 @@ class GLASS(torch.nn.Module):
         feature_aggregator = common.NetworkFeatureAggregator(
             self.backbone, self.layers_to_extract_from, self.device, train_backbone
         ) # Read comment from fuction to understand
-        feature_dimensions = feature_aggregator.feature_dimensions(input_shape)
+        feature_dimensions = feature_aggregator.feature_dimensions(input_shape) # 
         self.forward_modules["feature_aggregator"] = feature_aggregator
         preprocessing = common.Preprocessing(feature_dimensions, pretrain_embed_dimension)
         self.forward_modules["preprocessing"] = preprocessing
@@ -142,17 +142,17 @@ class GLASS(torch.nn.Module):
             with torch.no_grad():
                 features = self.forward_modules["feature_aggregator"](images)
 
-        features = [features[layer] for layer in self.layers_to_extract_from]
+        features = [features[layer] for layer in self.layers_to_extract_from] # [n_layer, B, L, C]
 
         for i, feat in enumerate(features):
             if len(feat.shape) == 3:
                 B, L, C = feat.shape
-                features[i] = feat.reshape(B, int(math.sqrt(L)), int(math.sqrt(L)), C).permute(0, 3, 1, 2)
+                features[i] = feat.reshape(B, int(math.sqrt(L)), int(math.sqrt(L)), C).permute(0, 3, 1, 2) # [n_layer, B, C, w, h]
 
         features = [self.patch_maker.patchify(x, return_spatial_info=True) for x in features]
-        patch_shapes = [x[1] for x in features]
-        patch_features = [x[0] for x in features]
-        ref_num_patches = patch_shapes[0]
+        patch_shapes = [x[1] for x in features] # [n_layer, n_patch_w, n_patch_h]
+        patch_features = [x[0] for x in features] # [n_layer, B, N_patches, C, patchsize, patchsize]
+        ref_num_patches = patch_shapes[0] # [n_patch_w, n_patch_h]
 
         for i in range(1, len(patch_features)):
             _features = patch_features[i]
@@ -160,27 +160,27 @@ class GLASS(torch.nn.Module):
 
             _features = _features.reshape(
                 _features.shape[0], patch_dims[0], patch_dims[1], *_features.shape[2:]
-            )
-            _features = _features.permute(0, 3, 4, 5, 1, 2)
-            perm_base_shape = _features.shape
-            _features = _features.reshape(-1, *_features.shape[-2:])
+            ) # (B, n_patch_w, n_patch_h, C, patchsize, patchsize)
+            _features = _features.permute(0, 3, 4, 5, 1, 2) # (B, C, patchsize, patchsize, n_patch_w, n_patch_h)
+            perm_base_shape = _features.shape # (B, C, patchsize, patchsize, n_patch_w, n_patch_h)
+            _features = _features.reshape(-1, *_features.shape[-2:]) # (BxCxpatchsizexpatchsize, n_patch_w, n_patch_h)
             _features = F.interpolate(
-                _features.unsqueeze(1),
+                _features.unsqueeze(1), # (BxCxpatchsizexpatchsize, 1, n_patch_w, n_patch_h)
                 size=(ref_num_patches[0], ref_num_patches[1]),
                 mode="bilinear",
                 align_corners=False,
-            )
-            _features = _features.squeeze(1)
+            ) # (BxCxpatchsizexpatchsize, 1, ref_w, ref_w)
+            _features = _features.squeeze(1) # (BxCxpatchsizexpatchsize, ref_w, n_ref_wpatch_h)
             _features = _features.reshape(
                 *perm_base_shape[:-2], ref_num_patches[0], ref_num_patches[1]
-            )
-            _features = _features.permute(0, 4, 5, 1, 2, 3)
-            _features = _features.reshape(len(_features), -1, *_features.shape[-3:])
+            ) # (B, C, patchsize, patchsize, ref_w, ref_h)
+            _features = _features.permute(0, 4, 5, 1, 2, 3) # (B, ref_w, ref_h, C, patchsize, patchsize)
+            _features = _features.reshape(len(_features), -1, *_features.shape[-3:]) # (B, ref_wxref_h, C, patchsize, patchsize)
             patch_features[i] = _features
-
-        patch_features = [x.reshape(-1, *x.shape[-3:]) for x in patch_features]
-        patch_features = self.forward_modules["preprocessing"](patch_features)
-        patch_features = self.forward_modules["preadapt_aggregator"](patch_features)
+        # patch_features: (n_layer, B, ref_wxref_h, C, patchsize, patchsize)
+        patch_features = [x.reshape(-1, *x.shape[-3:]) for x in patch_features] # (n_layer, Bxref_wxref_h, C, patchsize, patchsize)
+        patch_features = self.forward_modules["preprocessing"](patch_features) # (B × ref_w × ref_h , n_layer , preprocessing_dim)
+        patch_features = self.forward_modules["preadapt_aggregator"](patch_features) # (B × ref_w × ref_h , target_dim)
 
         return patch_features, patch_shapes
 
@@ -252,19 +252,20 @@ class GLASS(torch.nn.Module):
             self.forward_modules.eval()
             with torch.no_grad():  # compute center
                 for i, data in enumerate(training_data):
-                    img = data["image"]
+                    img = data["image"] # (B, C, H, W)
                     img = img.to(torch.float).to(self.device)
                     if self.pre_proj > 0:
                         outputs = self.pre_projection(self._embed(img, evaluation=False)[0])
-                        outputs = outputs[0] if len(outputs) == 2 else outputs
-                    else:
-                        outputs = self._embed(img, evaluation=False)[0]
-                    outputs = outputs[0] if len(outputs) == 2 else outputs
-                    outputs = outputs.reshape(img.shape[0], -1, outputs.shape[-1])
+                        outputs = outputs[0] if len(outputs) == 2 else outputs # (B × ref_w × ref_h , target_dim)
 
-                    batch_mean = torch.mean(outputs, dim=0)
+                    else:
+                        outputs = self._embed(img, evaluation=False)[0]  # (B × ref_w × ref_h , target_dim)
+                    outputs = outputs[0] if len(outputs) == 2 else outputs
+                    outputs = outputs.reshape(img.shape[0], -1, outputs.shape[-1]) # (B, ref_w × ref_h ,target_dim)
+
+                    batch_mean = torch.mean(outputs, dim=0) # (ref_w × ref_h ,target_dim)
                     if i == 0:
-                        self.c = batch_mean
+                        self.c = batch_mean # (ref_w × ref_h ,target_dim)
                     else:
                         self.c += batch_mean
                 self.c /= len(training_data)
@@ -331,30 +332,30 @@ class GLASS(torch.nn.Module):
             img = img.to(torch.float).to(self.device)
             if self.pre_proj > 0:
                 fake_feats = self.pre_projection(self._embed(aug, evaluation=False)[0])
-                fake_feats = fake_feats[0] if len(fake_feats) == 2 else fake_feats
+                fake_feats = fake_feats[0] if len(fake_feats) == 2 else fake_feats # (B × ref_w × ref_h , target_dim)
                 true_feats = self.pre_projection(self._embed(img, evaluation=False)[0])
-                true_feats = true_feats[0] if len(true_feats) == 2 else true_feats
+                true_feats = true_feats[0] if len(true_feats) == 2 else true_feats # (B × ref_w × ref_h , target_dim)
             else:
                 fake_feats = self._embed(aug, evaluation=False)[0]
                 fake_feats.requires_grad = True
                 true_feats = self._embed(img, evaluation=False)[0]
                 true_feats.requires_grad = True
 
-            mask_s_gt = data_item["mask_s"].reshape(-1, 1).to(self.device)
-            noise = torch.normal(0, self.noise, true_feats.shape).to(self.device)
+            mask_s_gt = data_item["mask_s"].reshape(-1, 1).to(self.device) # [B x feat_size x feat_size, 1]
+            noise = torch.normal(0, self.noise, true_feats.shape).to(self.device) # (B × ref_w × ref_h , target_dim)
             gaus_feats = true_feats + noise
 
-            center = self.c.repeat(img.shape[0], 1, 1)
-            center = center.reshape(-1, center.shape[-1])
-            true_points = torch.concat([fake_feats[mask_s_gt[:, 0] == 0], true_feats], dim=0)
-            c_t_points = torch.concat([center[mask_s_gt[:, 0] == 0], center], dim=0)
-            dist_t = torch.norm(true_points - c_t_points, dim=1)
-            r_t = torch.tensor([torch.quantile(dist_t, q=self.radius)]).to(self.device)
+            center = self.c.repeat(img.shape[0], 1, 1) # (B, ref_w × ref_h ,target_dim)
+            center = center.reshape(-1, center.shape[-1]) # (B x ref_w × ref_h ,target_dim)
+            true_points = torch.concat([fake_feats[mask_s_gt[:, 0] == 0], true_feats], dim=0) # (K + B x ref_w × ref_h ,target_dim); K < B x ref_w × ref_h
+            c_t_points = torch.concat([center[mask_s_gt[:, 0] == 0], center], dim=0)  # (K + B x ref_w × ref_h ,target_dim); K < B x ref_w × ref_h
+            dist_t = torch.norm(true_points - c_t_points, dim=1) # (K + B x ref_w × ref_h)
+            r_t = torch.tensor([torch.quantile(dist_t, q=self.radius)]).to(self.device) # shape = 1
 
             for step in range(self.step + 1):
-                scores = self.discriminator(torch.cat([true_feats, gaus_feats]))
-                true_scores = scores[:len(true_feats)]
-                gaus_scores = scores[len(true_feats):]
+                scores = self.discriminator(torch.cat([true_feats, gaus_feats])) # (2 x B × ref_w × ref_h, 1)
+                true_scores = scores[:len(true_feats)] # (B × ref_w × ref_h, 1)
+                gaus_scores = scores[len(true_feats):] # (B × ref_w × ref_h, 1)
                 true_loss = torch.nn.BCELoss()(true_scores, torch.zeros_like(true_scores))
                 gaus_loss = torch.nn.BCELoss()(gaus_scores, torch.ones_like(gaus_scores))
                 bce_loss = true_loss + gaus_loss
@@ -362,17 +363,17 @@ class GLASS(torch.nn.Module):
                 if step == self.step:
                     break
                 elif self.mining == 0:
-                    dist_g = torch.norm(gaus_feats - center, dim=1)
-                    r_g = torch.tensor([torch.quantile(dist_g, q=self.radius)]).to(self.device)
+                    dist_g = torch.norm(gaus_feats - center, dim=1) # (B × ref_w × ref_h)
+                    r_g = torch.tensor([torch.quantile(dist_g, q=self.radius)]).to(self.device) # shape = 1
                     break
 
-                grad = torch.autograd.grad(gaus_loss, [gaus_feats])[0]
-                grad_norm = torch.norm(grad, dim=1)
-                grad_norm = grad_norm.view(-1, 1)
-                grad_normalized = grad / (grad_norm + 1e-10)
+                grad = torch.autograd.grad(gaus_loss, [gaus_feats])[0] # (B × ref_w × ref_h , target_dim)
+                grad_norm = torch.norm(grad, dim=1) # (B × ref_w × ref_h)
+                grad_norm = grad_norm.view(-1, 1) # (B × ref_w × ref_h , 1)
+                grad_normalized = grad / (grad_norm + 1e-10) # (B × ref_w × ref_h , target_dim)
 
                 with torch.no_grad():
-                    gaus_feats.add_(0.001 * grad_normalized)
+                    gaus_feats.add_(0.001 * grad_normalized) # add all element on tensor
 
                 if (step + 1) % 5 == 0:
                     dist_g = torch.norm(gaus_feats - center, dim=1)

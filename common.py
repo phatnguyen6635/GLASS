@@ -20,7 +20,7 @@ class Preprocessing(torch.nn.Module):
         _features = []
         for module, feature in zip(self.preprocessing_modules, features):
             _features.append(module(feature))
-        return torch.stack(_features, dim=1)
+        return torch.stack(_features, dim=1) # (Bxref_wxref_h, n_layer, preprocessing_dim)
 
 
 class MeanMapper(torch.nn.Module):
@@ -28,9 +28,9 @@ class MeanMapper(torch.nn.Module):
         super(MeanMapper, self).__init__()
         self.preprocessing_dim = preprocessing_dim
 
-    def forward(self, features):
-        features = features.reshape(len(features), 1, -1) # (N, 1, dim)
-        return F.adaptive_avg_pool1d(features, self.preprocessing_dim).squeeze(1) # (N, preprocessing_dim)
+    def forward(self, features): # features: (Bxref_wxref_h, C, patchsize, patchsize)
+        features = features.reshape(len(features), 1, -1) # (Bxref_wxref_h, 1, C*patchsize*patchsize)
+        return F.adaptive_avg_pool1d(features, self.preprocessing_dim).squeeze(1) # (Bxref_wxref_h, preprocessing_dim)
 
 
 class Aggregator(torch.nn.Module):
@@ -38,11 +38,11 @@ class Aggregator(torch.nn.Module):
         super(Aggregator, self).__init__()
         self.target_dim = target_dim
 
-    def forward(self, features):
+    def forward(self, features): #(B × ref_w × ref_h , n_layer , preprocessing_dim)
         """Returns reshaped and average pooled features."""
-        features = features.reshape(len(features), 1, -1) #(N, 1, dim)
-        features = F.adaptive_avg_pool1d(features, self.target_dim) # (N, 1, target_dim)
-        return features.reshape(len(features), -1) # (N, target_dim)
+        features = features.reshape(len(features), 1, -1) #(B × ref_w × ref_h , 1, n_layer*preprocessing_dim)
+        features = F.adaptive_avg_pool1d(features, self.target_dim) # (B × ref_w × ref_h , 1, target_dim)
+        return features.reshape(len(features), -1) # (B × ref_w × ref_h , target_dim)
 
 
 class RescaleSegmentor:
@@ -56,14 +56,13 @@ class RescaleSegmentor:
             if isinstance(patch_scores, np.ndarray):
                 patch_scores = torch.from_numpy(patch_scores)
             _scores = patch_scores.to(self.device)
-            _scores = _scores.unsqueeze(1)
+            _scores = _scores.unsqueeze(1) # Add new dimension in position i
             _scores = F.interpolate(
                 _scores, size=self.target_size, mode="bilinear", align_corners=False
-            )
-            _scores = _scores.squeeze(1)
+            ) # Need [B, C, W patch, H patch] formation
+            _scores = _scores.squeeze(1)     
             patch_scores = _scores.cpu().numpy()
-        return [ndimage.gaussian_filter(patch_score, sigma=self.smoothing) for patch_score in patch_scores]
-
+        return [ndimage.gaussian_filter(patch_score, sigma=self.smoothing) for patch_score in patch_scores] # [B, W, H]                                                                          
 
 class NetworkFeatureAggregator(torch.nn.Module):
     """Efficient extraction of network features."""
@@ -110,7 +109,7 @@ class NetworkFeatureAggregator(torch.nn.Module):
         """Computes the feature dimensions for all layers given input_shape."""
         _input = torch.ones([1] + list(input_shape)).to(self.device)
         _output = self(_input)
-        return [_output[layer].shape[1] for layer in self.layers_to_extract_from] # Get the channel in each layer.
+        return [_output[layer].shape[1] for layer in self.layers_to_extract_from] # Get the channel in each layer. [n_feature_map_1, n_feature_map_2]
 
     def register_hook(self, layer_name):
         module = self.find_module(self.backbone, layer_name) # return layer which'name is layer_name. ex: 100, 200
