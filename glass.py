@@ -376,45 +376,45 @@ class GLASS(torch.nn.Module):
                     gaus_feats.add_(0.001 * grad_normalized) # add all element on tensor
 
                 if (step + 1) % 5 == 0:
-                    dist_g = torch.norm(gaus_feats - center, dim=1)
-                    r_g = torch.tensor([torch.quantile(dist_g, q=self.radius)]).to(self.device)
-                    proj_feats = center if self.svd == 1 else true_feats
-                    r = r_t if self.svd == 1 else 0.5
+                    dist_g = torch.norm(gaus_feats - center, dim=1) # (B × ref_w × ref_h)
+                    r_g = torch.tensor([torch.quantile(dist_g, q=self.radius)]).to(self.device) # shape = 1
+                    proj_feats = center if self.svd == 1 else true_feats # (B x ref_w × ref_h ,target_dim)
+                    r = r_t if self.svd == 1 else 0.5 # shape = 1
 
-                    h = gaus_feats - proj_feats
-                    h_norm = dist_g if self.svd == 1 else torch.norm(h, dim=1)
-                    alpha = torch.clamp(h_norm, r, 2 * r)
-                    proj = (alpha / (h_norm + 1e-10)).view(-1, 1)
-                    h = proj * h
-                    gaus_feats = proj_feats + h
+                    h = gaus_feats - proj_feats # (B x ref_w × ref_h, target_dim)
+                    h_norm = dist_g if self.svd == 1 else torch.norm(h, dim=1) # (B × ref_w × ref_h)
+                    alpha = torch.clamp(h_norm, r, 2 * r) # (B × ref_w × ref_h)
+                    proj = (alpha / (h_norm + 1e-10)).view(-1, 1) # (B × ref_w × ref_h, 1)
+                    h = proj * h # (B × ref_w × ref_h, target_dim)
+                    gaus_feats = proj_feats + h # (B × ref_w × ref_h, target_dim)
 
-            fake_points = fake_feats[mask_s_gt[:, 0] == 1]
-            true_points = true_feats[mask_s_gt[:, 0] == 1]
-            c_f_points = center[mask_s_gt[:, 0] == 1]
-            dist_f = torch.norm(fake_points - c_f_points, dim=1)
-            r_f = torch.tensor([torch.quantile(dist_f, q=self.radius)]).to(self.device)
-            proj_feats = c_f_points if self.svd == 1 else true_points
-            r = r_t if self.svd == 1 else 1
+            fake_points = fake_feats[mask_s_gt[:, 0] == 1] # (K, target_dim) ; K < B x ref_w × ref_h
+            true_points = true_feats[mask_s_gt[:, 0] == 1] # (K, target_dim) ; K < B x ref_w × ref_h
+            c_f_points = center[mask_s_gt[:, 0] == 1] # (K, target_dim) ; K < B x ref_w × ref_h 
+            dist_f = torch.norm(fake_points - c_f_points, dim=1) # (K)
+            r_f = torch.tensor([torch.quantile(dist_f, q=self.radius)]).to(self.device) # 1
+            proj_feats = c_f_points if self.svd == 1 else true_points # (K, target_dim)
+            r = r_t if self.svd == 1 else 1 # shape = 1
 
             if self.svd == 1:
-                h = fake_points - proj_feats
-                h_norm = dist_f if self.svd == 1 else torch.norm(h, dim=1)
-                alpha = torch.clamp(h_norm, 2 * r, 4 * r)
-                proj = (alpha / (h_norm + 1e-10)).view(-1, 1)
-                h = proj * h
-                fake_points = proj_feats + h
-                fake_feats[mask_s_gt[:, 0] == 1] = fake_points
+                h = fake_points - proj_feats # (K, target_dim)
+                h_norm = dist_f if self.svd == 1 else torch.norm(h, dim=1) # (K)
+                alpha = torch.clamp(h_norm, 2 * r, 4 * r) # (K)
+                proj = (alpha / (h_norm + 1e-10)).view(-1, 1) # (K, 1)
+                h = proj * h # (K, target_dim)
+                fake_points = proj_feats + h # (K, target_dim)
+                fake_feats[mask_s_gt[:, 0] == 1] = fake_points # (B × ref_w × ref_h, target_dim)
 
-            fake_scores = self.discriminator(fake_feats)
+            fake_scores = self.discriminator(fake_feats) # (B × ref_w × ref_h, 1)
             if self.p > 0:
-                fake_dist = (fake_scores - mask_s_gt) ** 2
-                d_hard = torch.quantile(fake_dist, q=self.p)
-                fake_scores_ = fake_scores[fake_dist >= d_hard].unsqueeze(1)
-                mask_ = mask_s_gt[fake_dist >= d_hard].unsqueeze(1)
+                fake_dist = (fake_scores - mask_s_gt) ** 2  # (B × ref_w × ref_h, 1)
+                d_hard = torch.quantile(fake_dist, q=self.p) # (1)
+                fake_scores_ = fake_scores[fake_dist >= d_hard].unsqueeze(1) # (K , 1)
+                mask_ = mask_s_gt[fake_dist >= d_hard].unsqueeze(1) # (K , 1)
             else:
                 fake_scores_ = fake_scores
-                mask_ = mask_s_gt
-            output = torch.cat([1 - fake_scores_, fake_scores_], dim=1)
+                mask_ = mask_s_gt # (B × ref_w × ref_h, 1)
+            output = torch.cat([1 - fake_scores_, fake_scores_], dim=1) # (K , 2)
             focal_loss = self.focal_loss(output, mask_)
 
             loss = bce_loss + focal_loss

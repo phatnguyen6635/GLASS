@@ -1,6 +1,6 @@
-datapath=/root/cqy/dataset/Custom
-augpath=/root/cqy/dataset/dtd/images
-classes=('class1' 'class2')
+datapath=/home/phatnguyen/Documents/data/data/station_1/
+augpath=./datasets/dtd/images
+classes=('1')
 flags=($(for class in "${classes[@]}"; do echo '-d '"${class}"; done))
 
 cd ..
