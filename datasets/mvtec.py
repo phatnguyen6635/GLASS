@@ -100,7 +100,7 @@ class MVTecDataset(torch.utils.data.Dataset):
         self.classname = classname
         self.dataset_name = dataset_name
 
-        if self.distribution != 1 and (self.classname == 'toothbrush' or self.classname == 'wood'):
+        if self.distribution != 1 and (self.classname == 'toothbrush' or self.classname == 'wood'): 
             self.resize = round(self.imgsize * 329 / 288)
 
         xlsx_path = './datasets/excel/' + self.dataset_name + '_distribution.xlsx'
@@ -308,3 +308,14 @@ class MVTecDataset(torch.utils.data.Dataset):
 #  │          └── crack
 #  │               ├── 000_mask.png
 #  │               └── 001_mask.png
+
+# dataset/
+#  ├── bottle
+#  │    ├── train
+#  │    │     └── good
+#  │    │          └── 000.png
+#  │
+#  ├── fg_mask
+#  │    └── bottle
+#  │         ├── 000.png
+#  │         └── 001.png
