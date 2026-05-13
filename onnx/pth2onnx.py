@@ -15,6 +15,8 @@ class GLASS_onnx(torch.nn.Module):
         self.glass.load(self.backbone, ["layer2", "layer3"],
                         'cuda', (3, 288, 288), 1536, 1536)
         state_dict = torch.load('../results/models/backbone_0/wfdd_grid_cloth/ckpt_best_219.pth', map_location='cuda')
+        if "backbone" in state_dict:
+            self.glass.backbone.load_state_dict(state_dict["backbone"])
         self.glass.pre_projection.load_state_dict(state_dict["pre_projection"])
         self.glass.discriminator.load_state_dict(state_dict["discriminator"])
 

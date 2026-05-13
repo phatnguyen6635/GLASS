@@ -62,6 +62,8 @@ class GLASS(torch.nn.Module):
             radius=0.75, # Quantile for mainfold or hyperpherse, 75% normal sample are selected
             p=0.5, # Quantile for hard mining 50% hard sameple are selected
             lr=0.0001,
+            backbone_lr_ratio=0.1,
+            backbone_train_start_epoch=0,
             svd=0,
             step=20, # Update Gaussian ascent 20 steps after 1 batch training
             limit=392,
@@ -89,9 +91,14 @@ class GLASS(torch.nn.Module):
         self.meta_epochs = meta_epochs
         self.lr = lr
         self.train_backbone = train_backbone
+        self.backbone_lr_ratio = backbone_lr_ratio
+        self.backbone_train_start_epoch = max(0, backbone_train_start_epoch)
+        self.backbone_training_active = False
         if self.train_backbone:
-            self.backbone_opt = torch.optim.AdamW(self.forward_modules["feature_aggregator"].backbone.parameters(), lr)
-
+            self.backbone_opt = torch.optim.AdamW(
+                self.forward_modules["feature_aggregator"].backbone.parameters(),
+                lr * self.backbone_lr_ratio,
+            )
         self.pre_proj = pre_proj
         if self.pre_proj > 0:
             self.pre_projection = Projection(self.target_embed_dimension, self.target_embed_dimension, pre_proj)
@@ -123,6 +130,13 @@ class GLASS(torch.nn.Module):
         self.model_dir = ""
         self.dataset_name = ""
         self.logger = None
+        
+        # Load state dict
+        # checkpoint = torch.load('/home/phatnguyen/Documents/repo/base-glass/results/models/backbone_0/mvtec_24_ad_s/', map_location=device)
+
+        # self.discriminator.load_state_dict(checkpoint["discriminator"])
+
+        # self.pre_projection.load_state_dict(checkpoint["pre_projection"])
 
     def set_model_dir(self, model_dir, dataset_name):
         self.model_dir = model_dir
@@ -133,9 +147,12 @@ class GLASS(torch.nn.Module):
         os.makedirs(self.tb_dir, exist_ok=True)
         self.logger = TBWrapper(self.tb_dir)
 
+    def _should_train_backbone(self):
+        return self.train_backbone and self.backbone_training_active
+
     def _embed(self, images, detach=True, provide_patch_shapes=False, evaluation=False):
         """Returns feature embeddings for images."""
-        if not evaluation and self.train_backbone:
+        if not evaluation and self._should_train_backbone():
             self.forward_modules["feature_aggregator"].train()
             features = self.forward_modules["feature_aggregator"](images, eval=evaluation)
         else:
@@ -201,6 +218,10 @@ class GLASS(torch.nn.Module):
                 state_dict["pre_projection"] = OrderedDict({
                     k: v.detach().cpu()
                     for k, v in self.pre_projection.state_dict().items()})
+            if self.train_backbone:
+                state_dict["backbone"] = OrderedDict({
+                    k: v.detach().cpu()
+                    for k, v in self.backbone.state_dict().items()})
 
         self.distribution = training_data.dataset.distribution
         xlsx_path = './datasets/excel/' + name.split('_')[0] + '_distribution.xlsx'
@@ -250,17 +271,18 @@ class GLASS(torch.nn.Module):
         pbar_str1 = ""
         best_record = None
         for i_epoch in pbar:
+            self.backbone_training_active = self.train_backbone and i_epoch >= self.backbone_train_start_epoch
             self.forward_modules.eval()
             with torch.no_grad():  # compute center
                 for i, data in enumerate(training_data):
                     img = data["image"] # (B, C, H, W)
                     img = img.to(torch.float).to(self.device)
                     if self.pre_proj > 0:
-                        outputs = self.pre_projection(self._embed(img, evaluation=False)[0])
+                        outputs = self.pre_projection(self._embed(img, evaluation=True)[0])
                         outputs = outputs[0] if len(outputs) == 2 else outputs # (B × ref_w × ref_h , target_dim)
 
                     else:
-                        outputs = self._embed(img, evaluation=False)[0]  # (B × ref_w × ref_h , target_dim)
+                        outputs = self._embed(img, evaluation=True)[0]  # (B × ref_w × ref_h , target_dim)
                     outputs = outputs[0] if len(outputs) == 2 else outputs
                     outputs = outputs.reshape(img.shape[0], -1, outputs.shape[-1]) # (B, ref_w × ref_h ,target_dim)
 
@@ -275,8 +297,8 @@ class GLASS(torch.nn.Module):
             update_state_dict()
 
             if (i_epoch + 1) % self.eval_epochs == 0:
-                images, scores, segmentations, labels_gt, masks_gt = self.predict(val_data)
-                image_auroc, image_ap, pixel_auroc, pixel_ap, pixel_pro = self._evaluate(images, scores, segmentations,
+                images, scores, segmentations, labels_gt, masks_gt, image_paths = self.predict(val_data)
+                image_auroc, image_ap, pixel_auroc, pixel_ap, pixel_pro, tpr, tnr = self._evaluate(images, scores, segmentations,
                                                                                          labels_gt, masks_gt, name)
 
                 self.logger.logger.add_scalar("i-auroc", image_auroc, i_epoch)
@@ -288,14 +310,16 @@ class GLASS(torch.nn.Module):
                 eval_path = './results/eval/' + name + '/'
                 train_path = './results/training/' + name + '/'
                 if best_record is None:
-                    best_record = [image_auroc, image_ap, pixel_auroc, pixel_ap, pixel_pro, i_epoch]
+                    best_record = [image_auroc, image_ap, pixel_auroc, pixel_ap, pixel_pro, i_epoch, tpr, tnr]
                     ckpt_path_best = os.path.join(self.ckpt_dir, "ckpt_best_{}.pth".format(i_epoch))
                     torch.save(state_dict, ckpt_path_best)
                     shutil.rmtree(eval_path, ignore_errors=True)
                     shutil.copytree(train_path, eval_path)
 
-                elif image_auroc + pixel_auroc > best_record[0] + best_record[2]:
-                    best_record = [image_auroc, image_ap, pixel_auroc, pixel_ap, pixel_pro, i_epoch]
+                # elif image_auroc + pixel_auroc > best_record[0] + best_record[2]:
+                # elif image_auroc  > best_record[0]:
+                elif tpr + tnr > best_record[-2] + best_record[-1]:
+                    best_record = [image_auroc, image_ap, pixel_auroc, pixel_ap, pixel_pro, i_epoch, tpr, tnr]
                     os.remove(ckpt_path_best)
                     ckpt_path_best = os.path.join(self.ckpt_dir, "ckpt_best_{}.pth".format(i_epoch))
                     torch.save(state_dict, ckpt_path_best)
@@ -315,6 +339,7 @@ class GLASS(torch.nn.Module):
         return best_record
 
     def _train_discriminator(self, input_data, cur_epoch, pbar, pbar_str1):
+        self.backbone_training_active = self.train_backbone and cur_epoch >= self.backbone_train_start_epoch
         self.forward_modules.eval()
         if self.pre_proj > 0:
             self.pre_projection.train()
@@ -326,6 +351,8 @@ class GLASS(torch.nn.Module):
             self.dsc_opt.zero_grad()
             if self.pre_proj > 0:
                 self.proj_opt.zero_grad()
+            if self._should_train_backbone():
+                self.backbone_opt.zero_grad()
 
             aug = data_item["aug"]
             aug = aug.to(torch.float).to(self.device)
@@ -368,9 +395,9 @@ class GLASS(torch.nn.Module):
                     r_g = torch.tensor([torch.quantile(dist_g, q=self.radius)]).to(self.device) # shape = 1
                     break
 
-                grad = torch.autograd.grad(gaus_loss, [gaus_feats])[0] # (B × ref_w × ref_h , target_dim)
+                grad = torch.autograd.grad(gaus_loss, [gaus_feats])[0] # (B × ref_w × ref_h ], target_dim)
                 grad_norm = torch.norm(grad, dim=1) # (B × ref_w × ref_h)
-                grad_norm = grad_norm.view(-1, 1) # (B × ref_w × ref_h , 1)
+                grad_norm = grad_norm.view(-1, 1) # (B × ref_w × ref_h, 1)
                 grad_normalized = grad / (grad_norm + 1e-10) # (B × ref_w × ref_h , target_dim)
 
                 with torch.no_grad():
@@ -422,7 +449,7 @@ class GLASS(torch.nn.Module):
             loss.backward()
             if self.pre_proj > 0:
                 self.proj_opt.step()
-            if self.train_backbone:
+            if self._should_train_backbone():
                 self.backbone_opt.step()
             self.dsc_opt.step()
 
@@ -471,7 +498,7 @@ class GLASS(torch.nn.Module):
 
         return pbar_str2, all_p_true_, all_p_fake_
 
-    def compute_metrics(self, scores, labels_gt, threshold=0.5):
+    def compute_metrics(self, scores, labels_gt, threshold=0.6):
         scores = np.array(scores)
         labels_gt = np.array(labels_gt)
 
@@ -513,16 +540,18 @@ class GLASS(torch.nn.Module):
                 self.discriminator.load_state_dict(state_dict['discriminator'])
                 if "pre_projection" in state_dict:
                     self.pre_projection.load_state_dict(state_dict["pre_projection"])
+                if "backbone" in state_dict:
+                    self.backbone.load_state_dict(state_dict["backbone"])
             else:
                 self.load_state_dict(state_dict, strict=False)
 
-            images, scores, segmentations, labels_gt, masks_gt = self.predict(test_data)
+            images, scores, segmentations, labels_gt, masks_gt, image_paths = self.predict(test_data)
             for i in range(len(images)):
-                test_dict[i] = [str(i + 1).zfill(3),scores[i].tolist(), labels_gt[i]]
+                test_dict[i] = [str(i + 1).zfill(3),scores[i].tolist(), labels_gt[i], image_paths[i]]
             import json
             with open(os.path.join(self.ckpt_dir, "test_scores.json"), 'w') as f:
                 json.dump(test_dict, f)
-            image_auroc, image_ap, pixel_auroc, pixel_ap, pixel_pro = self._evaluate(images, scores, segmentations,
+            image_auroc, image_ap, pixel_auroc, pixel_ap, pixel_pro, tpr, tnr = self._evaluate(images, scores, segmentations,
                                                                                      labels_gt, masks_gt, name, path='eval')
             epoch = int(ckpt_path[0].split('_')[-1].split('.')[0])
         else:
@@ -555,6 +584,13 @@ class GLASS(torch.nn.Module):
             pixel_pro = -1.
             return image_auroc, image_ap, pixel_auroc, pixel_ap, pixel_pro
 
+        results = self.compute_metrics(scores=scores, labels_gt=labels_gt)
+        LOGGER.info(
+            f"TPR: {results['tpr']*100:.2f}%, "
+            f"TNR: {results['tnr']*100:.2f}%, "
+            f"Accuracy: {results['accuracy']*100:.2f}%, "
+        )
+        
         defects = np.array(images)
         targets = np.array(masks_gt)
         for i in range(len(defects)):
@@ -572,7 +608,7 @@ class GLASS(torch.nn.Module):
             utils.del_remake_dir(full_path, del_flag=False)
             cv2.imwrite(full_path + str(i + 1).zfill(3) + '.png', img_up)
 
-        return image_auroc, image_ap, pixel_auroc, pixel_ap, pixel_pro
+        return image_auroc, image_ap, pixel_auroc, pixel_ap, pixel_pro, results['tpr'], results['tnr']
 
     def predict(self, test_dataloader):
         """This function provides anomaly scores/maps for full dataloaders."""
@@ -599,7 +635,7 @@ class GLASS(torch.nn.Module):
                     scores.append(score)
                     masks.append(mask)
 
-        return images, scores, masks, labels_gt, masks_gt
+        return images, scores, masks, labels_gt, masks_gt, img_paths
 
     def _predict(self, img):
         """Infer score and mask for a batch of images."""

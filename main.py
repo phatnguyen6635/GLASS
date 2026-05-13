@@ -42,6 +42,8 @@ def main(**kwargs):
 @click.option("--radius", type=float, default=0.75)
 @click.option("--p", type=float, default=0.5)
 @click.option("--lr", type=float, default=0.0001)
+@click.option("--backbone_lr_ratio", type=float, default=0.1)
+@click.option("--backbone_train_start_epoch", type=int, default=0)
 @click.option("--svd", type=int, default=0)
 @click.option("--step", type=int, default=20)
 @click.option("--limit", type=int, default=392)
@@ -63,6 +65,8 @@ def net(
         radius,
         p,
         lr,
+        backbone_lr_ratio,
+        backbone_train_start_epoch,
         svd,
         step,
         limit,
@@ -104,6 +108,8 @@ def net(
                 radius=radius,
                 p=p,
                 lr=lr,
+                backbone_lr_ratio=backbone_lr_ratio,
+                backbone_train_start_epoch=backbone_train_start_epoch,
                 svd=svd,
                 step=step,
                 limit=limit,

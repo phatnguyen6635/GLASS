@@ -1,14 +1,17 @@
 from torchvision import transforms
 from perlin import perlin_mask
+from circle import circle
 from enum import Enum
 
 import numpy as np
 import pandas as pd
+import cv2
 
 import PIL
 import torch
 import os
 import glob
+import random
 
 _CLASSNAMES = [
     "carpet",
@@ -31,6 +34,158 @@ _CLASSNAMES = [
 IMAGENET_MEAN = [0.485, 0.456, 0.406]
 IMAGENET_STD = [0.229, 0.224, 0.225]
 
+def save_aug_image(tensor_img, name):
+    img = tensor_img.detach().cpu().clone()
+
+    # CHW -> HWC
+    if img.ndim == 3:
+        img = img.permute(1, 2, 0)
+
+    img = img.numpy()
+
+    # de-normalize ImageNet
+    img = img * IMAGENET_STD + IMAGENET_MEAN
+
+    # clamp + convert
+    img = np.clip(img, 0, 1)
+    img = (img * 255).astype(np.uint8)
+
+    image_path = os.path.join("/home/phatnguyen/Documents/repo/base-glass/aug", name)
+    cv2.imwrite(image_path, cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
+
+
+def apply_clahe(
+    img,
+    clip_limit=3.0,
+    tile_grid_size=(8, 8)
+):
+    img = np.array(img)
+    # RGB -> LAB
+    lab = cv2.cvtColor(
+        img,
+        cv2.COLOR_RGB2LAB
+    )
+
+    l, a, b = cv2.split(lab)
+
+    # Create CLAHE
+    clahe = cv2.createCLAHE(
+        clipLimit=clip_limit,
+        tileGridSize=tile_grid_size
+    )
+
+    # Apply on Lightness channel
+    cl = clahe.apply(l)
+
+    # Merge channels
+    merged = cv2.merge((cl, a, b))
+
+    # LAB -> RGB
+    clahe_img = cv2.cvtColor(
+        merged,
+        cv2.COLOR_LAB2RGB
+    )
+    
+    clahe_img = PIL.Image.fromarray(clahe_img)
+    return clahe_img
+
+def soft_residual_clahe(
+    img,
+    sigma=15,
+    alpha=1.15,
+    beta=0.35,
+    clip_limit=2.5,
+    tile_grid_size=(8,8)
+):
+    """
+    Soft Residual + CLAHE enhancement
+    for metal scratch anomaly detection
+
+    Input:
+        PIL.Image RGB
+
+    Output:
+        PIL.Image RGB
+    """
+
+    # =========================
+    # PIL -> numpy
+    # =========================
+    img = np.array(img)
+
+    # =========================
+    # Gaussian blur
+    # =========================
+    blur = cv2.GaussianBlur(
+        img,
+        (0,0),
+        sigma
+    )
+
+    # =========================
+    # Residual
+    # =========================
+    residual = cv2.subtract(
+        img,
+        blur
+    )
+
+    # =========================
+    # Soft blend
+    # =========================
+    enhanced = cv2.addWeighted(
+        img,        # original
+        alpha,
+        residual,   # residual
+        beta,
+        0
+    )
+
+    enhanced = np.clip(
+        enhanced,
+        0,
+        255
+    ).astype(np.uint8)
+
+    # =========================
+    # RGB -> LAB
+    # =========================
+    lab = cv2.cvtColor(
+        enhanced,
+        cv2.COLOR_RGB2LAB
+    )
+
+    l, a, b = cv2.split(lab)
+
+    # =========================
+    # CLAHE on L channel
+    # =========================
+    clahe = cv2.createCLAHE(
+        clipLimit=clip_limit,
+        tileGridSize=tile_grid_size
+    )
+
+    l = clahe.apply(l)
+
+    # =========================
+    # Merge LAB
+    # =========================
+    merged = cv2.merge((l,a,b))
+
+    # =========================
+    # LAB -> RGB
+    # =========================
+    out = cv2.cvtColor(
+        merged,
+        cv2.COLOR_LAB2RGB
+    )
+
+    # =========================
+    # numpy -> PIL
+    # =========================
+    out = PIL.Image.fromarray(out)
+
+    return out
 
 class DatasetSplit(Enum):
     TRAIN = "train"
@@ -172,11 +327,13 @@ class MVTecDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         classname, anomaly, image_path, mask_path = self.data_to_iterate[idx]
         image = PIL.Image.open(image_path).convert("RGB")
+        image = soft_residual_clahe(image)
         image = self.transform_img(image)
 
         mask_fg = mask_s = aug_image = torch.tensor([1])
         if self.split == DatasetSplit.TRAIN:
             aug = PIL.Image.open(np.random.choice(self.anomaly_source_paths)).convert("RGB")
+            aug =  soft_residual_clahe(aug)
             if self.rand_aug:
                 transform_aug = self.rand_augmenter()
                 aug = transform_aug(aug)
@@ -187,15 +344,36 @@ class MVTecDataset(torch.utils.data.Dataset):
                 fgmask_path = image_path.split(classname)[0] + 'fg_mask/' + classname + '/' + os.path.split(image_path)[-1]
                 mask_fg = PIL.Image.open(fgmask_path)
                 mask_fg = torch.ceil(self.transform_mask(mask_fg)[0])
-
-            mask_all = perlin_mask(image.shape, self.imgsize // self.downsampling, 0, 6, mask_fg, 1)
+            check = torch.randn(1) >= 0.5
+            if check:
+                mask_all = perlin_mask(image.shape, self.imgsize // self.downsampling, 0, 6, mask_fg, 1)
+            else:
+                mask_all = circle(image.shape, self.imgsize // self.downsampling, 1, 6, mask_fg)
+            
             mask_s = torch.from_numpy(mask_all[0]) # [feat_size, feat_size]
-            mask_l = torch.from_numpy(mask_all[1]) # 
+            mask_l = torch.from_numpy(mask_all[1])
 
             beta = np.random.normal(loc=self.mean, scale=self.std)
             beta = np.clip(beta, .2, .8)
-            aug_image = image * (1 - mask_l) + (1 - beta) * aug * mask_l + beta * image * mask_l
-
+            
+            folder_aug = "/home/phatnguyen/Documents/repo/base-glass/synthetic/anomaly"
+            files = [f for f in os.listdir(folder_aug) if f.lower().endswith((".png"))]
+            random_file = random.choice(files)
+            img_path = os.path.join(folder_aug, random_file)
+            aug_ = PIL.Image.open(img_path).convert("RGB")
+            aug_ = soft_residual_clahe(aug_)
+            aug_ = self.transform_img(aug_)
+            aug = aug if check else aug_
+            
+            if check:
+                aug_image = image * (1 - mask_l) + (1 - beta) * aug * mask_l + beta * image * mask_l
+            else:
+                aug_image = image * (1 - mask_l) + aug * mask_l
+            # save_aug_image(aug_image, image_path.split('/')[-1])
+#             cv2.imwrite(
+#     f"/home/phatnguyen/Documents/repo/base-glass/aug/mask_{image_path.split('/')[-1]}",
+#     (mask_l * 255).to(torch.uint8).cpu().numpy()
+# )
         if self.split == DatasetSplit.TEST and mask_path is not None:
             mask_gt = PIL.Image.open(mask_path).convert('L') # convert to grayscale
             mask_gt = self.transform_mask(mask_gt)
@@ -208,7 +386,7 @@ class MVTecDataset(torch.utils.data.Dataset):
             "mask_s": mask_s,
             "mask_gt": mask_gt,
             "is_anomaly": int(anomaly != "good"),
-            "image_path": image_path,
+            "image_path": image_path, 
         }
 
     def __len__(self):
