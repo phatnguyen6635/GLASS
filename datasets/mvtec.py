@@ -4,6 +4,7 @@ from enum import Enum
 
 import numpy as np
 import pandas as pd
+import cv2
 
 import PIL
 import torch
@@ -31,6 +32,88 @@ _CLASSNAMES = [
 IMAGENET_MEAN = [0.485, 0.456, 0.406]
 IMAGENET_STD = [0.229, 0.224, 0.225]
 
+def save_aug_image(tensor_img, name):
+    img = tensor_img.detach().cpu().clone()
+
+    # CHW -> HWC
+    if img.ndim == 3:
+        img = img.permute(1, 2, 0)
+
+    img = img.numpy()
+
+    # de-normalize ImageNet
+    img = img * IMAGENET_STD + IMAGENET_MEAN
+
+    # clamp + convert
+    img = np.clip(img, 0, 1)
+    img = (img * 255).astype(np.uint8)
+
+    image_path = os.path.join("/home/phatnguyen/Documents/repo/base-glass/aug", name)
+    cv2.imwrite(image_path, cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
+
+def soft_residual_clahe(
+    img,
+    sigma=15,
+    alpha=1.15,
+    beta=0.35,
+    clip_limit=2,
+    tile_grid_size=(4,4)
+):
+    """
+    Soft Residual + CLAHE enhancement
+    for metal scratch anomaly detection
+
+    Input:
+        PIL.Image RGB
+
+    Output:
+        PIL.Image RGB
+    """
+    
+    img = np.array(img)
+    # blur = cv2.GaussianBlur(
+    #     img,
+    #     (0,0),
+    #     sigma
+    # )
+    # residual = cv2.subtract(
+    #     img,
+    #     blur
+    # )
+
+    # enhanced = cv2.addWeighted(
+    #     img,        # original
+    #     alpha,
+    #     residual,   # residual
+    #     beta,
+    #     0   
+    # )
+
+    # enhanced = np.clip(
+    #     enhanced,
+    #     0,
+    #     255
+    # ).astype(np.uint8)
+    lab = cv2.cvtColor(
+        img,
+        cv2.COLOR_RGB2LAB
+    )
+
+    l, a, b = cv2.split(lab)
+    clahe = cv2.createCLAHE(
+        clipLimit=clip_limit,
+        tileGridSize=tile_grid_size
+    )
+
+    l = clahe.apply(l)
+    merged = cv2.merge((l,a,b))
+    out = cv2.cvtColor(
+        merged,
+        cv2.COLOR_LAB2RGB
+    )
+    out = PIL.Image.fromarray(out)
+
+    return out
 
 class DatasetSplit(Enum):
     TRAIN = "train"
@@ -172,11 +255,15 @@ class MVTecDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         classname, anomaly, image_path, mask_path = self.data_to_iterate[idx]
         image = PIL.Image.open(image_path).convert("RGB")
+        image = soft_residual_clahe(image)
         image = self.transform_img(image)
+        if anomaly != "good": 
+            save_aug_image(image, image_path.split('/')[-1])
 
         mask_fg = mask_s = aug_image = torch.tensor([1])
         if self.split == DatasetSplit.TRAIN:
             aug = PIL.Image.open(np.random.choice(self.anomaly_source_paths)).convert("RGB")
+            aug = soft_residual_clahe(aug)
             if self.rand_aug:
                 transform_aug = self.rand_augmenter()
                 aug = transform_aug(aug)
@@ -207,7 +294,7 @@ class MVTecDataset(torch.utils.data.Dataset):
             "aug": aug_image,
             "mask_s": mask_s,
             "mask_gt": mask_gt,
-            "is_anomaly": int(anomaly != "good"),
+            "is_anomaly": int(anomaly != "good"),     
             "image_path": image_path,
         }
 

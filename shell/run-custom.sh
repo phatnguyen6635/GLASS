@@ -9,7 +9,7 @@ python main.py \
     --seed 0 \
     --test ckpt \
   net \
-    -b wideresnet50 \
+    -b wideresnet101 \
     -le layer2 \
     -le layer3 \
     --pretrain_embed_dimension 1536 \
