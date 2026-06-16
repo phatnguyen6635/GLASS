@@ -498,7 +498,7 @@ class GLASS(torch.nn.Module):
 
         return pbar_str2, all_p_true_, all_p_fake_
 
-    def compute_metrics(self, scores, labels_gt, threshold=0.6):
+    def compute_metrics(self, scores, labels_gt, threshold=0.5):
         scores = np.array(scores)
         labels_gt = np.array(labels_gt)
 
@@ -551,7 +551,7 @@ class GLASS(torch.nn.Module):
             import json
             with open(os.path.join(self.ckpt_dir, "test_scores.json"), 'w') as f:
                 json.dump(test_dict, f)
-            image_auroc, image_ap, pixel_auroc, pixel_ap, pixel_pro, tpr, tnr = self._evaluate(images, scores, segmentations,
+            image_auroc, image_ap, pixel_auroc, pixel_ap, pixel_pro, tpr, tnr = self._evaluate(images, scores, segmentations, 
                                                                                      labels_gt, masks_gt, name, path='eval')
             epoch = int(ckpt_path[0].split('_')[-1].split('.')[0])
         else:
