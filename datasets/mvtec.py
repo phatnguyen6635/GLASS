@@ -255,7 +255,7 @@ class MVTecDataset(torch.utils.data.Dataset):
                 fgmask_path = image_path.split(classname)[0] + 'fg_mask/' + classname + '/' + os.path.split(image_path)[-1]
                 mask_fg = PIL.Image.open(fgmask_path)
                 mask_fg = torch.ceil(self.transform_mask(mask_fg)[0])
-            check = torch.randn(1) >= 0.5
+            check = torch.randn(1) >= 0.3
             mask_all = perlin_mask(image.shape, self.imgsize // self.downsampling, 0, 6, mask_fg, 1)
             if check:
                 mask_all = perlin_mask(image.shape, self.imgsize // self.downsampling, 0, 6, mask_fg, 1)
@@ -268,19 +268,19 @@ class MVTecDataset(torch.utils.data.Dataset):
             beta = np.random.normal(loc=self.mean, scale=self.std)
             beta = np.clip(beta, .2, .8)
             
-            # folder_aug = "/home/phatnguyen/Documents/repo/base-glass/synthetic/anomaly"
-            # files = [f for f in os.listdir(folder_aug) if f.lower().endswith((".png"))]
-            # random_file = random.choice(files)
-            # img_path = os.path.join(folder_aug, random_file)
-            # aug_ = PIL.Image.open(img_path).convert("RGB")
-            # aug_ = soft_residual_clahe(aug_)
-            # aug_ = self.transform_img(aug_)
-            # aug = aug if check else aug_
+            folder_aug = "/home/phatnguyen/Documents/repo/base-glass/synthetic/anomaly"
+            files = [f for f in os.listdir(folder_aug) if f.lower().endswith((".png"))]
+            random_file = random.choice(files)
+            img_path = os.path.join(folder_aug, random_file)
+            aug_ = PIL.Image.open(img_path).convert("RGB")
+            aug_ = apply_clahe(aug_)
+            aug_ = self.transform_img(aug_)
+            aug = aug if check else aug_
             
-            # if check:
-            aug_image = image * (1 - mask_l) + (1 - beta) * aug * mask_l + beta * image * mask_l
-            # else:
-            #     aug_image = image * (1 - mask_l) + aug * mask_l
+            if check:
+                aug_image = image * (1 - mask_l) + (1 - beta) * aug * mask_l + beta * image * mask_l
+            else:
+                aug_image = image * (1 - mask_l) + aug * mask_l
             # save_aug_image(aug_image, image_path.split('/')[-1])
 #             cv2.imwrite(
 #     f"/home/phatnguyen/Documents/repo/base-glass/aug/mask_{image_path.split('/')[-1]}",

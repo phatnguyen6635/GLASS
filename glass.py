@@ -317,8 +317,8 @@ class GLASS(torch.nn.Module):
                     shutil.copytree(train_path, eval_path)
 
                 # elif image_auroc + pixel_auroc > best_record[0] + best_record[2]:
-                # elif image_auroc  > best_record[0]:
-                elif tpr + tnr > best_record[-2] + best_record[-1]:
+                elif image_auroc  > best_record[0]:
+                # elif tpr + tnr > best_record[-2] + best_record[-1]:
                     best_record = [image_auroc, image_ap, pixel_auroc, pixel_ap, pixel_pro, i_epoch, tpr, tnr]
                     os.remove(ckpt_path_best)
                     ckpt_path_best = os.path.join(self.ckpt_dir, "ckpt_best_{}.pth".format(i_epoch))
