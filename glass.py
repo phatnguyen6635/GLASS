@@ -234,7 +234,6 @@ class GLASS(torch.nn.Module):
                 self.svd = 0
             elif self.distribution == 3:  # hypersphere
                 self.distribution = 0
-                self.svd = 1
             elif self.distribution == 4:  # opposite choose by file
                 self.distribution = 0
                 df = pd.read_excel(xlsx_path)
@@ -317,7 +316,7 @@ class GLASS(torch.nn.Module):
                     shutil.copytree(train_path, eval_path)
 
                 # elif image_auroc + pixel_auroc > best_record[0] + best_record[2]:
-                # elif image_auroc  > best_record[0]:
+                # # elif image_auroc  > best_record[0]:
                 elif tpr + tnr > best_record[-2] + best_record[-1]:
                     best_record = [image_auroc, image_ap, pixel_auroc, pixel_ap, pixel_pro, i_epoch, tpr, tnr]
                     os.remove(ckpt_path_best)
@@ -498,7 +497,7 @@ class GLASS(torch.nn.Module):
 
         return pbar_str2, all_p_true_, all_p_fake_
 
-    def compute_metrics(self, scores, labels_gt, threshold=0.6):
+    def compute_metrics(self, scores, labels_gt, threshold=0.5):
         scores = np.array(scores)
         labels_gt = np.array(labels_gt)
 
