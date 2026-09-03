@@ -1,6 +1,7 @@
 from torchvision import transforms
 from perlin import perlin_mask
 from circle import circle
+from bavia import burr_mask
 from enum import Enum
 
 import numpy as np
@@ -56,8 +57,9 @@ def save_aug_image(tensor_img, name):
 
 def apply_clahe(
     img,
-    clip_limit=5.0,
-    tile_grid_size=(8, 8)
+    mask=None,
+    clip_limit=2.0,
+    tile_grid_size=(4, 4)
 ):
     img = np.array(img)
     # RGB -> LAB
@@ -94,6 +96,18 @@ def apply_clahe(
         merged,
         cv2.COLOR_LAB2RGB
     )
+    
+    if mask is not None:
+        mask = np.array(mask)
+        
+        if mask.dtype != np.uint8:
+            mask = mask.astype(np.uint8)
+        
+        mask = np.where(mask > 0, 255, 0).astype(np.uint8)
+        
+        result = img.copy()
+        result[mask > 0] = clahe_img[mask > 0]
+        clahe_img = result
     
     clahe_img = PIL.Image.fromarray(clahe_img)
     return clahe_img
@@ -238,13 +252,18 @@ class MVTecDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, idx):
         classname, anomaly, image_path, mask_path = self.data_to_iterate[idx]
+
+        fgmask_path = image_path.split(classname)[0] + 'fg_mask/' + classname + '/' + os.path.split(image_path)[- 1]
+        mask_fg_ = PIL.Image.open(fgmask_path)
+            
         image = PIL.Image.open(image_path).convert("RGB")
-        # image = apply_clahe(image)
+        image = apply_clahe(image, mask_fg_)
         image = self.transform_img(image)
+        
         mask_fg = mask_s = aug_image = torch.tensor([1])
         if self.split == DatasetSplit.TRAIN:
             aug = PIL.Image.open(np.random.choice(self.anomaly_source_paths)).convert("RGB")
-            # aug =  apply_clahe(aug)
+            aug =  apply_clahe(aug)
             if self.rand_aug:
                 transform_aug = self.rand_augmenter()
                 aug = transform_aug(aug)
@@ -252,15 +271,37 @@ class MVTecDataset(torch.utils.data.Dataset):
                 aug = self.transform_img(aug)
  
             if self.class_fg:
-                fgmask_path = image_path.split(classname)[0] + 'fg_mask/' + classname + '/' + os.path.split(image_path)[-1]
-                mask_fg = PIL.Image.open(fgmask_path)
-                mask_fg = torch.ceil(self.transform_mask(mask_fg)[0])
-            # check = torch.randn(1) >= 0.3
-            mask_all = perlin_mask(image.shape, self.imgsize // self.downsampling, 0, 6, mask_fg, 1)
-            # if check:
-            #     mask_all = perlin_mask(image.shape, self.imgsize // self.downsampling, 0, 6, mask_fg, 1)
-            # else:
-            #     mask_all = circle(image.shape, self.imgsize // self.downsampling, 1, 6, mask_fg)
+                # fgmask_path = image_path.split(classname)[0] + 'fg_mask/' + classname + '/' + os.path.split(image_path)[- 1]
+                # mask_fg = PIL.Image.open(fgmask_path)
+                # mask_fg = torch.ceil(self.transform_mask(mask_fg)[0])
+            
+                black = -torch.tensor(
+                IMAGENET_MEAN,
+                dtype=image.dtype,
+                device=image.device
+            ).view(3, 1, 1) / torch.tensor(
+                IMAGENET_STD,
+                dtype=image.dtype,
+                device=image.device
+            ).view(3, 1, 1)
+
+                mask_fg = (~torch.isclose(
+                    image,
+                    black,
+                    atol=1e-5
+                )).any(dim=0).float()
+                # mask_save = (mask_fg.detach().cpu().numpy() * 255).astype(np.uint8)
+                # cv2.imwrite(
+                #     f"/home/phatnguyen/Documents/repo/base-glass/aug/fg_{image_path.split('/')[-1]}",
+                #     mask_save
+                # )
+            check = torch.randn(1) >= 0.3
+            # mask_all = perlin_mask(image.shape, self.imgsize // self.downsampling, 0, 6, mask_fg, 1)
+            # mask_all = burr_mask(image.shape, self.imgsize // self.downsampling, mask_fg)
+            if check:
+                mask_all = perlin_mask(image.shape, self.imgsize // self.downsampling, 0, 6, mask_fg, 1)
+            else:
+                mask_all = burr_mask(image.shape, self.imgsize // self.downsampling, mask_fg)
             
             mask_s = torch.from_numpy(mask_all[0]) # [feat_size, feat_size]
             mask_l = torch.from_numpy(mask_all[1])
@@ -282,11 +323,18 @@ class MVTecDataset(torch.utils.data.Dataset):
             # else:
             #     aug_image = image * (1 - mask_l) + aug * mask_l
             # save_aug_image(aug_image, image_path.split('/')[-1])
+            # mask_save = (mask_l.detach().cpu().numpy() * 255).astype(np.uint8)
+            # cv2.imwrite(
+            #     f"/home/phatnguyen/Documents/repo/base-glass/aug/fg_{image_path.split('/')[-1]}",
+            #     mask_save
+            # )
 #             cv2.imwrite(
 #     f"/home/phatnguyen/Documents/repo/base-glass/aug/mask_{image_path.split('/')[-1]}",
 #     (mask_l * 255).to(torch.uint8).cpu().numpy()
 # )
         if self.split == DatasetSplit.TEST and mask_path is not None:
+            # save_aug_image(image, image_path.split('/')[-1])
+
             mask_gt = PIL.Image.open(mask_path).convert('L') # convert to grayscale
             mask_gt = self.transform_mask(mask_gt)
             # if anomaly != "good":

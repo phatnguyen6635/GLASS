@@ -1,7 +1,7 @@
 import os
 
 # Thư mục chứa ảnh
-folder_path = r"/home/phatnguyen/Documents/data/glass/23/train/good/"  # đổi thành đường dẫn của bạn
+folder_path = r"/home/phatnguyen/Documents/data/glass/16/train/good/"  # đổi thành đường dẫn của bạn
 
 # Lấy danh sách file
 files = [

@@ -1,6 +1,6 @@
 datapath=/home/phatnguyen/Documents/data/glass/
 augpath=./datasets/dtd/images
-classes=('23')
+classes=('16')
 flags=($(for class in "${classes[@]}"; do echo '-d '"${class}"; done))
 
 cd ..
@@ -11,13 +11,13 @@ python main.py \
   net \
     -b wideresnet101 \
     -le layer2 \
-    -le layer3  \
+    -le layer3 \
     --pretrain_embed_dimension 1536 \
     --target_embed_dimension 1536 \
     --patchsize 3 \
-    --meta_epochs 200 \
+    --meta_epochs 640 \
     --eval_epochs 1 \
-    --dsc_layers 2 \
+    --dsc_layers 3 \
     --dsc_hidden 1024 \
     --pre_proj 1 \
     --mining 1 \
@@ -34,6 +34,8 @@ python main.py \
     --rand_aug 1 \
     --batch_size 8 \
     --resize 576 \
+    --hflip 0.3\
+    --vflip 0.3\
     --downsampling 8\
     --imagesize 576 "${flags[@]}" mvtec $datapath $augpath
     

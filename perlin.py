@@ -52,7 +52,10 @@ def lerp_np(x, y, w):
 
 def rand_perlin_2d_np(shape, res, fade=lambda t: 6 * t ** 5 - 15 * t ** 4 + 10 * t ** 3):
     delta = (res[0] / shape[0], res[1] / shape[1])
-    d = (shape[0] // res[0], shape[1] // res[1])
+    # Use ceiling division so the repeated gradient tiles always cover the
+    # requested image size.  Floor division leaves the tile too small when an
+    # image dimension (e.g. 299) is not divisible by the sampled Perlin scale.
+    d = (math.ceil(shape[0] / res[0]), math.ceil(shape[1] / res[1]))
     grid = np.mgrid[0:res[0]:delta[0], 0:res[1]:delta[1]].transpose(1, 2, 0) % 1
 
     angles = 2 * math.pi * np.random.rand(res[0] + 1, res[1] + 1)

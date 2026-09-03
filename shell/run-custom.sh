@@ -35,3 +35,4 @@ python main.py \
     --batch_size 8 \
     --resize 288 \
     --imagesize 288 "${flags[@]}" mvtec $datapath $augpath
+    

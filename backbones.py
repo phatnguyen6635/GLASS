@@ -38,7 +38,6 @@ _BACKBONES = {
     "vit_swin_large": 'timm.create_model("swin_large_patch4_window7_224", pretrained=True)',
     "efficientnet_b7": 'timm.create_model("tf_efficientnet_b7", pretrained=True)',
     "efficientnet_b5": 'timm.create_model("tf_efficientnet_b5", pretrained=True)',
-    "efficientnet_b3": 'timm.create_model("tf_efficientnet_b3", pretrained=True)',
     "efficientnet_b1": 'timm.create_model("tf_efficientnet_b1", pretrained=True)',
     "efficientnetv2_m": 'timm.create_model("tf_efficientnetv2_m", pretrained=True)',
     "efficientnetv2_l": 'timm.create_model("tf_efficientnetv2_l", pretrained=True)',

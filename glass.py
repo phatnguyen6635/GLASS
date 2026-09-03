@@ -165,6 +165,10 @@ class GLASS(torch.nn.Module):
         for i, feat in enumerate(features):
             if len(feat.shape) == 3:
                 B, L, C = feat.shape
+                grid_size = int(math.sqrt(L))
+                if grid_size * grid_size != L:
+                    feat = feat[:, L - grid_size * grid_size:, :]
+                    B, L, C = feat.shape
                 features[i] = feat.reshape(B, int(math.sqrt(L)), int(math.sqrt(L)), C).permute(0, 3, 1, 2) # [n_layer, B, C, w, h]
 
         features = [self.patch_maker.patchify(x, return_spatial_info=True) for x in features]
@@ -316,8 +320,8 @@ class GLASS(torch.nn.Module):
                     shutil.rmtree(eval_path, ignore_errors=True)
                     shutil.copytree(train_path, eval_path)
 
-                # elif image_auroc + pixel_auroc > best_record[0] + best_record[2]:
-                elif image_auroc  > best_record[0]:
+                elif image_auroc + pixel_auroc > best_record[0] + best_record[2]:
+                # elif image_auroc  > best_record[0]:
                 # elif tpr + tnr > best_record[-2] + best_record[-1]:
                     best_record = [image_auroc, image_ap, pixel_auroc, pixel_ap, pixel_pro, i_epoch, tpr, tnr]
                     os.remove(ckpt_path_best)
@@ -369,7 +373,16 @@ class GLASS(torch.nn.Module):
                 true_feats = self._embed(img, evaluation=False)[0]
                 true_feats.requires_grad = True
 
-            mask_s_gt = data_item["mask_s"].reshape(-1, 1).to(self.device) # [B x feat_size x feat_size, 1]
+            #mask_s_gt = data_item["mask_s"].reshape(-1, 1).to(self.device) # [B x feat_size x feat_size, 1]
+            mask_s_gt = data_item["mask_s"].to(torch.float).to(self.device)
+
+            feature_size = math.isqrt(fake_feats.shape[0] // img.shape[0])
+            mask_s_gt = F.interpolate(
+                mask_s_gt.unsqueeze(1),
+                size=(feature_size, feature_size),
+                mode="nearest",
+            ).squeeze(1).reshape(-1, 1)
+
             noise = torch.normal(0, self.noise, true_feats.shape).to(self.device) # (B × ref_w × ref_h , target_dim)
             gaus_feats = true_feats + noise
 
