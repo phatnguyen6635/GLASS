@@ -58,7 +58,7 @@ def save_aug_image(tensor_img, name):
 def apply_clahe(
     img,
     mask=None,
-    clip_limit=2.0,
+    clip_limit=3.0,
     tile_grid_size=(4, 4)
 ):
     img = np.array(img)
@@ -111,6 +111,8 @@ def apply_clahe(
     
     clahe_img = PIL.Image.fromarray(clahe_img)
     return clahe_img
+
+    # return PIL.Image.fromarray(np.array(img).copy())
 
 
 class DatasetSplit(Enum):
@@ -297,7 +299,7 @@ class MVTecDataset(torch.utils.data.Dataset):
                 # )
             check = torch.randn(1) >= 0.3
             # mask_all = perlin_mask(image.shape, self.imgsize // self.downsampling, 0, 6, mask_fg, 1)
-            # mask_all = burr_mask(image.shape, self.imgsize // self.downsampling, mask_fg)
+            # # mask_all = burr_mask(image.shape, self.imgsize // self.downsampling, mask_fg)
             if check:
                 mask_all = perlin_mask(image.shape, self.imgsize // self.downsampling, 0, 6, mask_fg, 1)
             else:
