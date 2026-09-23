@@ -34,6 +34,28 @@ _CLASSNAMES = [
 IMAGENET_MEAN = [0.485, 0.456, 0.406]
 IMAGENET_STD = [0.229, 0.224, 0.225]
 
+
+class RandomRotationReflect:
+    """Rotate a PIL image without black corners caused by affine padding."""
+
+    def __init__(self, degrees):
+        self.degrees = float(degrees)
+
+    def __call__(self, image):
+        angle = random.uniform(-self.degrees, self.degrees)
+        array = np.asarray(image)
+        height, width = array.shape[:2]
+        matrix = cv2.getRotationMatrix2D((width / 2, height / 2), angle, 1.0)
+        rotated = cv2.warpAffine(
+            array,
+            matrix,
+            (width, height),
+            flags=cv2.INTER_LINEAR,
+            borderMode=cv2.BORDER_REFLECT_101,
+        )
+        return PIL.Image.fromarray(rotated)
+
+
 def save_aug_image(tensor_img, name):
     img = tensor_img.detach().cpu().clone()
 
@@ -280,7 +302,10 @@ class MVTecDataset(torch.utils.data.Dataset):
             transforms.RandomHorizontalFlip(h_flip_p),
             transforms.RandomVerticalFlip(v_flip_p),
             transforms.RandomGrayscale(gray_p),
-            transforms.RandomAffine(rotate_degrees,
+            # Reflection padding prevents rotation corners from becoming
+            # synthetic false defects during anomaly training.
+            RandomRotationReflect(rotate_degrees),
+            transforms.RandomAffine(0,
                                     translate=(translate, translate),
                                     scale=(1.0 - scale, 1.0 + scale),
                                     interpolation=transforms.InterpolationMode.BILINEAR),
