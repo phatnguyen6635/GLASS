@@ -51,7 +51,9 @@ class RandomRotationReflect:
             matrix,
             (width, height),
             flags=cv2.INTER_LINEAR,
-            borderMode=cv2.BORDER_REFLECT_101,
+            # borderMode=cv2.BORDER_REFLECT_101,
+            borderMode=cv2.BORDER_CONSTANT,
+            borderValue=(0, 0, 0),
         )
         return PIL.Image.fromarray(rotated)
 
@@ -107,12 +109,12 @@ def apply_clahe(
         merged,
         cv2.COLOR_LAB2RGB
     )
-    
     clahe_img = PIL.Image.fromarray(clahe_img)
     return clahe_img
 
 def soft_residual_clahe(
     img,
+    mask=True,
     sigma=15,
     alpha=1.15,
     beta=0.35,
@@ -205,6 +207,13 @@ def soft_residual_clahe(
     # =========================
     # numpy -> PIL
     # =========================
+    
+    if mask:
+        mask = (img > 0).any(axis=2)
+        result = img.copy()
+        result[mask > 0] = out[mask > 0]
+        out = result
+        
     out = PIL.Image.fromarray(out)
 
     return out
@@ -366,9 +375,25 @@ class MVTecDataset(torch.utils.data.Dataset):
                 aug = self.transform_img(aug)
 
             if self.class_fg:
-                fgmask_path = image_path.split(classname)[0] + 'fg_mask/' + classname + '/' + os.path.split(image_path)[-1]
-                mask_fg = PIL.Image.open(fgmask_path)
-                mask_fg = torch.ceil(self.transform_mask(mask_fg)[0])
+                # fgmask_path = image_path.split(classname)[0] + 'fg_mask/' + classname + '/' + os.path.split(image_path)[-1]
+                # mask_fg = PIL.Image.open(fgmask_path)
+                # mask_fg = torch.ceil(self.transform_mask(mask_fg)[0])
+                black = -torch.tensor(
+                IMAGENET_MEAN,
+                dtype=image.dtype,
+                device=image.device
+            ).view(3, 1, 1) / torch.tensor(
+                IMAGENET_STD,
+                dtype=image.dtype,
+                device=image.device
+            ).view(3, 1, 1)
+
+                mask_fg = (~torch.isclose(
+                    image,
+                    black,
+                    atol=1e-5
+                )).any(dim=0).float()
+                
             check = torch.randn(1) >= 0.5
             if check:
                 mask_all = perlin_mask(image.shape, self.imgsize // self.downsampling, 0, 6, mask_fg, 1)

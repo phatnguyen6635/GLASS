@@ -32,6 +32,7 @@ python main.py \
     --distribution 2 \
     --mean 0.5 \
     --std 0.1 \
+    --rotate_degrees 180\
     --fg 1 \
     --rand_aug 1 \
     --batch_size 6 \

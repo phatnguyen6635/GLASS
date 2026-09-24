@@ -301,7 +301,7 @@ class GLASSInference:
 if __name__ == "__main__":
     # Step 1: Initialize model once when running Backend API / Background Script / Camera Socket
     print("[INFO] Initializing model...")
-    model = GLASSInference(ckpt_path="/home/phatnguyen/Documents/data/glass/results/24/model/mvtec_24_ad_21/ckpt_best_78.pth", threshold=0.5, device="cuda:0")
+    model = GLASSInference(ckpt_path="/home/phatnguyen/Documents/repo/base-glass/results/models/backbone_0/mvtec_24_ad/ckpt_best_82.pth", threshold=0.5, device="cuda:0")
     print("[INFO] Model is ready!")
     
     # Step 2: Load image (Simulate image from Camera, Frontend, Folder, etc.)
