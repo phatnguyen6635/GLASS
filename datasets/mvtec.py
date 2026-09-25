@@ -58,8 +58,8 @@ def save_aug_image(tensor_img, name):
 def apply_clahe(
     img,
     mask=None,
-    clip_limit=2.0,
-    tile_grid_size=(4, 4)
+    clip_limit=3.0,
+    tile_grid_size=(8, 8)
 ):
     img = np.array(img)
     # RGB -> LAB
