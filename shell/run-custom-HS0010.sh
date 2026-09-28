@@ -1,6 +1,6 @@
 datapath=/home/phatnguyen/Documents/data/glass/
 augpath=./datasets/dtd/images
-classes=('24_ad')
+classes=('vertical')
 flags=($(for class in "${classes[@]}"; do echo '-d '"${class}"; done))
 
 cd ..
@@ -25,14 +25,11 @@ python main.py \
     --radius 0.75 \
     --p 0.5 \
     --step 20 \
-    --limit 1000 \
-    --backbone_train_start_epoch 50\
-    --train_backbone\
+    --limit 500 \
   dataset \
     --distribution 2 \
     --mean 0.5 \
     --std 0.1 \
-    --rotate_degrees 180\
     --fg 1 \
     --rand_aug 1 \
     --batch_size 6 \
