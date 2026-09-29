@@ -133,7 +133,7 @@ def rotate_image_reflect(image, angle):
 
 
 class GLASSInference:
-    def __init__(self, ckpt_path, device="cuda:0", threshold=0.5, tta_angles=(0,), tta_reduction="mean"):
+    def __init__(self, ckpt_path, device="cuda:0", threshold=0.5, tta_angles=(0, 45, 90, 135, 180, 225, 270, 315), tta_reduction="mean"):
         """
         Initialize the GLASS model.
         Parameters are fixed based on MVtec dataset configuration (run-custom.sh).
@@ -301,12 +301,12 @@ class GLASSInference:
 if __name__ == "__main__":
     # Step 1: Initialize model once when running Backend API / Background Script / Camera Socket
     print("[INFO] Initializing model...")
-    model = GLASSInference(ckpt_path="/home/phatnguyen/Documents/repo/base-glass/results/models/backbone_0/mvtec_24_ad/ckpt_best_82.pth", threshold=0.5, device="cuda:0")
+    model = GLASSInference(ckpt_path="/home/phatnguyen/Documents/repo/base-glass/results/models/backbone_0/mvtec_24_ad/ckpt_best_146.pth", threshold=0.5, device="cuda:0")
     print("[INFO] Model is ready!")
     
     # Step 2: Load image (Simulate image from Camera, Frontend, Folder, etc.)
     # Call .predict() whenever a new image is available
-    image_path = "/home/phatnguyen/Documents/test/20260228T034228.601.png"
+    image_path = "/home/phatnguyen/Documents/test/20260228T033905.795.png"
     if os.path.exists(image_path):
         result = model.predict(image_path)
         print(f"Analysis result: {result['prediction']} - Point: {result['confidence']}")

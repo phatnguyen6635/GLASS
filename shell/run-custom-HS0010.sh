@@ -25,7 +25,7 @@ python main.py \
     --radius 0.75 \
     --p 0.5 \
     --step 20 \
-    --limit 1000 \
+    --limit 500 \
     --backbone_train_start_epoch 50\
     --train_backbone\
   dataset \
@@ -34,6 +34,8 @@ python main.py \
     --std 0.1 \
     --rotate_degrees 180\
     --fg 1 \
+    --hflip 0.5 \
+    --vflip 0.5 \
     --rand_aug 1 \
     --batch_size 6 \
     --resize 576 \
