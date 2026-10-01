@@ -20,6 +20,10 @@ import utils
 import glob
 import shutil
 
+# Add consistency loss
+import random
+import torchvision.transforms.functional as TF
+
 LOGGER = logging.getLogger(__name__)
 IMAGENET_MEAN = [0.485, 0.456, 0.406]
 IMAGENET_STD = [0.229, 0.224, 0.225]
@@ -64,6 +68,10 @@ class GLASS(torch.nn.Module):
             lr=0.0001,
             backbone_lr_ratio=0.1,
             backbone_train_start_epoch=0,
+            
+            # Rotation consistency experiment
+            lambda_cons=0.01,
+
             svd=0,
             step=20, # Update Gaussian ascent 20 steps after 1 batch training
             limit=392,
@@ -94,6 +102,7 @@ class GLASS(torch.nn.Module):
         self.backbone_lr_ratio = backbone_lr_ratio
         self.backbone_train_start_epoch = max(0, backbone_train_start_epoch)
         self.backbone_training_active = False
+        self.lambda_cons = lambda_cons
         if self.train_backbone:
             self.backbone_opt = torch.optim.AdamW(
                 self.forward_modules["feature_aggregator"].backbone.parameters(),
@@ -317,7 +326,7 @@ class GLASS(torch.nn.Module):
                     shutil.copytree(train_path, eval_path)
 
                 # elif image_auroc + pixel_auroc > best_record[0] + best_record[2]:
-                # elif image_auroc  > best_record[0]:
+                # elif image_auroc  > best_record[0]: 
                 elif tpr + tnr > best_record[-2] + best_record[-1]:
                     best_record = [image_auroc, image_ap, pixel_auroc, pixel_ap, pixel_pro, i_epoch, tpr, tnr]
                     os.remove(ckpt_path_best)
@@ -337,6 +346,15 @@ class GLASS(torch.nn.Module):
 
             torch.save(state_dict, ckpt_path_save)
         return best_record
+    
+    def _rotate_for_consistency(self, images, angle):
+        return TF.rotate(
+            images,
+            angle=angle,
+            interpolation=TF.InterpolationMode.BILINEAR,
+            expand=False,
+            fill=0,
+        )
 
     def _train_discriminator(self, input_data, cur_epoch, pbar, pbar_str1):
         self.backbone_training_active = self.train_backbone and cur_epoch >= self.backbone_train_start_epoch
@@ -358,6 +376,11 @@ class GLASS(torch.nn.Module):
             aug = aug.to(torch.float).to(self.device)
             img = data_item["image"]
             img = img.to(torch.float).to(self.device)
+            angle = random.randint(0, 359)
+            img_rot = self._rotate_for_consistency(img, angle)
+            true_raw_feats, patch_shapes = self._embed(img, evaluation=False)
+            rot_raw_feats, _ = self._embed(img_rot, evaluation=False)
+
             if self.pre_proj > 0:
                 fake_feats = self.pre_projection(self._embed(aug, evaluation=False)[0])
                 fake_feats = fake_feats[0] if len(fake_feats) == 2 else fake_feats # (B × ref_w × ref_h , target_dim)
@@ -368,6 +391,21 @@ class GLASS(torch.nn.Module):
                 fake_feats.requires_grad = True
                 true_feats = self._embed(img, evaluation=False)[0]
                 true_feats.requires_grad = True
+
+            B = img.shape[0]
+            grid_h, grid_w = patch_shapes[0]
+            N = grid_h * grid_w
+            z1 = true_raw_feats.reshape(B, N, -1).mean(dim=1)
+            z2 = rot_raw_feats.reshape(B, N, -1).mean(dim=1)
+
+            z1 = F.normalize(z1, dim=1)
+            z2 = F.normalize(z2, dim=1)
+
+            cos_sim = (z1 * z2).sum(dim=1)
+
+            consistency_loss = (
+                1.0 - cos_sim
+            ).mean()
 
             mask_s_gt = data_item["mask_s"].reshape(-1, 1).to(self.device) # [B x feat_size x feat_size, 1]
             noise = torch.normal(0, self.noise, true_feats.shape).to(self.device) # (B × ref_w × ref_h , target_dim)
@@ -445,7 +483,8 @@ class GLASS(torch.nn.Module):
             output = torch.cat([1 - fake_scores_, fake_scores_], dim=1) # (K , 2)
             focal_loss = self.focal_loss(output, mask_)
 
-            loss = bce_loss + focal_loss
+            glass_loss = bce_loss + focal_loss
+            loss = (glass_loss + self.lambda_cons * consistency_loss)
             loss.backward()
             if self.pre_proj > 0:
                 self.proj_opt.step()
@@ -498,7 +537,7 @@ class GLASS(torch.nn.Module):
 
         return pbar_str2, all_p_true_, all_p_fake_
 
-    def compute_metrics(self, scores, labels_gt, threshold=0.45):
+    def compute_metrics(self, scores, labels_gt, threshold=0.6):
         scores = np.array(scores)
         labels_gt = np.array(labels_gt)
 
