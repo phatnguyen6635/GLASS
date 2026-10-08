@@ -670,7 +670,7 @@ class GLASS(torch.nn.Module):
             mask = cv2.applyColorMap(mask, cv2.COLORMAP_JET)
             overlay = cv2.addWeighted(defect, 0.7, mask, 0.4, 0)
             img_up = np.hstack([defect, target, overlay])
-            img_up = cv2.resize(img_up, (256 * 3, 256))
+            img_up = cv2.resize(img_up, (576 * 3, 576))
             full_path = './results/' + path + '/' + name + '/'
             utils.del_remake_dir(full_path, del_flag=False)
             cv2.imwrite(full_path + str(i + 1).zfill(3) + '.png', img_up)
