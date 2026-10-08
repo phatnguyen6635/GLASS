@@ -215,6 +215,9 @@ class GLASS(torch.nn.Module):
         state_dict = {}
         ckpt_path = glob.glob(self.ckpt_dir + '/ckpt_best*')
         ckpt_path_save = os.path.join(self.ckpt_dir, "ckpt.pth")
+        # Thư mục chứa checkpoint và kết quả theo từng epoch
+        epoch_root = os.path.join(self.ckpt_dir, "epochs")
+        os.makedirs(epoch_root, exist_ok=True)
         if len(ckpt_path) != 0:
             LOGGER.info("Start testing, ckpt file found!")
             return 0., 0., 0., 0., 0., -1.
@@ -304,9 +307,29 @@ class GLASS(torch.nn.Module):
 
             pbar_str, pt, pf = self._train_discriminator(training_data, i_epoch, pbar, pbar_str1)
             update_state_dict()
+            epoch_number = i_epoch # i_epoch đếm từ 0
+            epoch_dir = os.path.join(epoch_root, f"epoch_{epoch_number:04d}")
+            os.makedirs(epoch_dir, exist_ok=True)
+
+            epoch_ckpt_path = os.path.join(epoch_dir, "checkpoint.pth")
+            torch.save(state_dict, epoch_ckpt_path)
 
             if (i_epoch + 1) % self.eval_epochs == 0:
                 images, scores, segmentations, labels_gt, masks_gt, image_paths = self.predict(val_data)
+                test_dict = {}
+                for i in range(len(images)):
+                    test_dict[i] = [
+                        str(i + 1).zfill(3),
+                        scores[i].tolist(),
+                        labels_gt[i],
+                        image_paths[i],
+                    ]
+
+                import json
+                test_scores_path = os.path.join(epoch_dir, "test_scores.json")
+                with open(test_scores_path, "w") as f:
+                    json.dump(test_dict, f)
+                    
                 image_auroc, image_ap, pixel_auroc, pixel_ap, pixel_pro, tpr, tnr = self._evaluate(images, scores, segmentations,
                                                                                          labels_gt, masks_gt, name)
 
@@ -315,6 +338,11 @@ class GLASS(torch.nn.Module):
                 self.logger.logger.add_scalar("p-auroc", pixel_auroc, i_epoch)
                 self.logger.logger.add_scalar("p-ap", pixel_ap, i_epoch)
                 self.logger.logger.add_scalar("p-pro", pixel_pro, i_epoch)
+
+                # Lưu riêng ảnh mà _evaluate vừa ghi cho epoch này
+                train_path = os.path.join("./results/training", name)
+                epoch_images_path = os.path.join(epoch_dir, "images")
+                shutil.copytree(train_path, epoch_images_path)
 
                 eval_path = './results/eval/' + name + '/'
                 train_path = './results/training/' + name + '/'
@@ -334,7 +362,6 @@ class GLASS(torch.nn.Module):
                     torch.save(state_dict, ckpt_path_best)
                     shutil.rmtree(eval_path, ignore_errors=True)
                     shutil.copytree(train_path, eval_path)
-
                 pbar_str1 = f" IAUC:{round(image_auroc * 100, 2)}({round(best_record[0] * 100, 2)})" \
                             f" IAP:{round(image_ap * 100, 2)}({round(best_record[1] * 100, 2)})" \
                             f" PAUC:{round(pixel_auroc * 100, 2)}({round(best_record[2] * 100, 2)})" \
@@ -537,7 +564,7 @@ class GLASS(torch.nn.Module):
 
         return pbar_str2, all_p_true_, all_p_fake_
 
-    def compute_metrics(self, scores, labels_gt, threshold=0.6):
+    def compute_metrics(self, scores, labels_gt, threshold=0.7):
         scores = np.array(scores)
         labels_gt = np.array(labels_gt)
 
@@ -640,8 +667,8 @@ class GLASS(torch.nn.Module):
                                 cv2.COLOR_GRAY2BGR)
             mask = (mask * 255).astype('uint8')
             mask = cv2.applyColorMap(mask, cv2.COLORMAP_JET)
-
-            img_up = np.hstack([defect, target, mask])
+            overlay = cv2.addWeighted(defect, 0.7, mask, 0.4, 0)
+            img_up = np.hstack([defect, target, overlay])
             img_up = cv2.resize(img_up, (256 * 3, 256))
             full_path = './results/' + path + '/' + name + '/'
             utils.del_remake_dir(full_path, del_flag=False)

@@ -50,7 +50,7 @@ def save_aug_image(tensor_img, name):
 
     image_path = os.path.join("/home/phatnguyen/Documents/repo/base-glass/aug", name)
     cv2.imwrite(image_path, cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
-
+    
 def apply_clahe(
     image_rgb: np.ndarray,
     mask: bool = True,
