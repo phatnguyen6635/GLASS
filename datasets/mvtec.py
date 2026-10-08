@@ -361,13 +361,13 @@ class MVTecDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         classname, anomaly, image_path, mask_path = self.data_to_iterate[idx]
         image = PIL.Image.open(image_path).convert("RGB")
-        image = soft_residual_clahe(image)
+        # image = soft_residual_clahe(image)
         image = self.transform_img(image)
 
         mask_fg = mask_s = aug_image = torch.tensor([1])
         if self.split == DatasetSplit.TRAIN:
             aug = PIL.Image.open(np.random.choice(self.anomaly_source_paths)).convert("RGB")
-            aug =  soft_residual_clahe(aug)
+            # aug =  soft_residual_clahe(aug)
             if self.rand_aug:
                 transform_aug = self.rand_augmenter()
                 aug = transform_aug(aug)
@@ -394,12 +394,12 @@ class MVTecDataset(torch.utils.data.Dataset):
                     atol=1e-5
                 )).any(dim=0).float()
                 
-            check = torch.randn(1) >= 0.5
+            check = torch.randn(1) <= 0.4
             if check:
                 mask_all = perlin_mask(image.shape, self.imgsize // self.downsampling, 0, 6, mask_fg, 1)
             else:
                 mask_all = circle(image.shape, self.imgsize // self.downsampling, 1, 6, mask_fg)
-            
+            # mask_all = perlin_mask(image.shape, self.imgsize // self.downsampling, 0, 6, mask_fg, 1)
             mask_s = torch.from_numpy(mask_all[0]) # [feat_size, feat_size]
             mask_l = torch.from_numpy(mask_all[1])
 
@@ -419,6 +419,8 @@ class MVTecDataset(torch.utils.data.Dataset):
                 aug_image = image * (1 - mask_l) + (1 - beta) * aug * mask_l + beta * image * mask_l
             else:
                 aug_image = image * (1 - mask_l) + aug * mask_l
+            # aug_image = image * (1 - mask_l) + (1 - beta) * aug * mask_l + beta * image * mask_l
+
             # save_aug_image(aug_image, image_path.split('/')[-1])
 #             cv2.imwrite(
 #     f"/home/phatnguyen/Documents/repo/base-glass/aug/mask_{image_path.split('/')[-1]}",
