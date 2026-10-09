@@ -411,10 +411,9 @@ class MVTecDataset(torch.utils.data.Dataset):
             random_file = random.choice(files)
             img_path = os.path.join(folder_aug, random_file)
             aug_ = PIL.Image.open(img_path).convert("RGB")
-            aug_ = soft_residual_clahe(aug_)
             aug_ = self.transform_img(aug_)
             aug = aug if check else aug_
-            
+             
             if check:
                 aug_image = image * (1 - mask_l) + (1 - beta) * aug * mask_l + beta * image * mask_l
             else:

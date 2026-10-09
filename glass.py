@@ -332,7 +332,31 @@ class GLASS(torch.nn.Module):
                     
                 image_auroc, image_ap, pixel_auroc, pixel_ap, pixel_pro, tpr, tnr = self._evaluate(images, scores, segmentations,
                                                                                          labels_gt, masks_gt, name)
+                # Tính lại cùng các giá trị mà _evaluate ghi ra log
+                cls_metrics = self.compute_metrics(
+                    scores=np.squeeze(np.array(scores)),
+                    labels_gt=labels_gt,
+                )
 
+                import csv
+                history_path = os.path.join(
+                    self.ckpt_dir, "tpr_tnr_accuracy_by_epoch.csv"
+                )
+                write_header = not os.path.exists(history_path)
+
+                with open(history_path, "a", newline="") as f:
+                    writer = csv.writer(f)
+
+                    if write_header:
+                        writer.writerow(["epoch", "TPR", "TNR", "Accuracy"])
+
+                    writer.writerow([
+                        epoch_number,
+                        f"{cls_metrics['tpr'] * 100:.2f}%",
+                        f"{cls_metrics['tnr'] * 100:.2f}%",
+                        f"{cls_metrics['accuracy'] * 100:.2f}%",
+                    ])
+                    
                 self.logger.logger.add_scalar("i-auroc", image_auroc, i_epoch)
                 self.logger.logger.add_scalar("i-ap", image_ap, i_epoch)
                 self.logger.logger.add_scalar("p-auroc", pixel_auroc, i_epoch)
