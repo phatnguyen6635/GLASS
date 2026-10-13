@@ -79,144 +79,58 @@ def save_aug_image(tensor_img, name):
 
 
 def apply_clahe(
-    img,
-    clip_limit=3.0,
-    tile_grid_size=(8, 8)
-):
-    img = np.array(img)
-    # RGB -> LAB
-    lab = cv2.cvtColor(
-        img,
-        cv2.COLOR_RGB2LAB
-    )
-
-    l, a, b = cv2.split(lab)
-
-    # Create CLAHE
-    clahe = cv2.createCLAHE(
-        clipLimit=clip_limit,
-        tileGridSize=tile_grid_size
-    )
-
-    # Apply on Lightness channel
-    cl = clahe.apply(l)
-
-    # Merge channels
-    merged = cv2.merge((cl, a, b))
-
-    # LAB -> RGB
-    clahe_img = cv2.cvtColor(
-        merged,
-        cv2.COLOR_LAB2RGB
-    )
-    clahe_img = PIL.Image.fromarray(clahe_img)
-    return clahe_img
-
-def soft_residual_clahe(
-    img,
-    mask=True,
-    sigma=15,
-    alpha=1.15,
-    beta=0.35,
-    clip_limit=2.5,
-    tile_grid_size=(8,8)
-):
+    image_rgb: np.ndarray,
+    mask: bool = True,
+    strong_aug: bool = False,
+    more_light: bool = False,
+    clip_limit: float = 2.0,
+    tile_grid_size: tuple[int, int] = (8, 8),
+) -> np.ndarray:
     """
-    Soft Residual + CLAHE enhancement
-    for metal scratch anomaly detection
+    Áp dụng CLAHE cho ảnh OpenCV RGB và trả về ảnh RGB.
 
-    Input:
-        PIL.Image RGB
-
-    Output:
-        PIL.Image RGB
+    mask là mask YOLO tùy chọn. Nếu có, vùng ngoài mask được giữ nguyên
+    (thường là nền đen của ảnh đã segmentation).
     """
-
-    # =========================
-    # PIL -> numpy
-    # =========================
-    img = np.array(img)
-
-    # =========================
-    # Gaussian blur
-    # =========================
-    blur = cv2.GaussianBlur(
-        img,
-        (0,0),
-        sigma
-    )
-
-    # =========================
-    # Residual
-    # =========================
-    residual = cv2.subtract(
-        img,
-        blur
-    )
-
-    # =========================
-    # Soft blend
-    # =========================
-    enhanced = cv2.addWeighted(
-        img,        # original
-        alpha,
-        residual,   # residual
-        beta,
-        0
-    )
-
-    enhanced = np.clip(
-        enhanced,
-        0,
-        255
-    ).astype(np.uint8)
-
-    # =========================
-    # RGB -> LAB
-    # =========================
-    lab = cv2.cvtColor(
-        enhanced,
-        cv2.COLOR_RGB2LAB
-    )
-
-    l, a, b = cv2.split(lab)
-
-    # =========================
-    # CLAHE on L channel
-    # =========================
-    clahe = cv2.createCLAHE(
-        clipLimit=clip_limit,
-        tileGridSize=tile_grid_size
-    )
-
-    l = clahe.apply(l)
-
-    # =========================
-    # Merge LAB
-    # =========================
-    merged = cv2.merge((l,a,b))
-
-    # =========================
-    # LAB -> RGB
-    # =========================
-    out = cv2.cvtColor(
-        merged,
-        cv2.COLOR_LAB2RGB
-    )
-
-    # =========================
-    # numpy -> PIL
-    # =========================
     
-    if mask:
-        mask = (img > 0).any(axis=2)
-        result = img.copy()
-        result[mask > 0] = out[mask > 0]
-        out = result
+    image_rgb = np.array(image_rgb)
+    
+    if strong_aug:
+        blur = cv2.GaussianBlur(image_rgb, (0,0), 15)
+        residual = cv2.subtract(image_rgb, blur)
+        enhanced = cv2.addWeighted(image_rgb, 1.15, residual, 0.35, 0)
+        enhanced = np.clip(enhanced, 0, 255).astype(np.uint8)
+        image_rgb = enhanced
         
-    out = PIL.Image.fromarray(out)
+    lab = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2LAB)
+    lightness, a_channel, b_channel = cv2.split(lab)
+    
+    if more_light:
+        table = np.array([
+        ((i / 255.0) ** 0.7) * 255
+        for i in np.arange(0, 256)
+    ]).astype("uint8")
+        lightness = cv2.LUT(lightness, table)
 
-    return out
+    clahe = cv2.createCLAHE(
+        clipLimit=float(clip_limit),
+        tileGridSize=tuple(tile_grid_size),
+    )
+    enhanced_lightness = clahe.apply(lightness)
+
+    output_rgb = cv2.cvtColor(
+        cv2.merge((enhanced_lightness, a_channel, b_channel)),
+        cv2.COLOR_LAB2RGB,
+    )
+
+    if mask:
+        mask = (image_rgb > 0).any(axis=2)
+        result = image_rgb.copy()
+        result[mask > 0] = output_rgb[mask > 0]
+        output_rgb = result
+        
+    return PIL.Image.fromarray(output_rgb)
+
 
 class DatasetSplit(Enum):
     TRAIN = "train"
@@ -361,13 +275,13 @@ class MVTecDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         classname, anomaly, image_path, mask_path = self.data_to_iterate[idx]
         image = PIL.Image.open(image_path).convert("RGB")
-        # image = soft_residual_clahe(image)
+        image = apply_clahe(image)
         image = self.transform_img(image)
 
         mask_fg = mask_s = aug_image = torch.tensor([1])
         if self.split == DatasetSplit.TRAIN:
             aug = PIL.Image.open(np.random.choice(self.anomaly_source_paths)).convert("RGB")
-            # aug =  soft_residual_clahe(aug)
+            aug =  apply_clahe(aug)
             if self.rand_aug:
                 transform_aug = self.rand_augmenter()
                 aug = transform_aug(aug)
@@ -411,6 +325,7 @@ class MVTecDataset(torch.utils.data.Dataset):
             random_file = random.choice(files)
             img_path = os.path.join(folder_aug, random_file)
             aug_ = PIL.Image.open(img_path).convert("RGB")
+            aug_ = apply_clahe(aug_)
             aug_ = self.transform_img(aug_)
             aug = aug if check else aug_
              
@@ -420,7 +335,7 @@ class MVTecDataset(torch.utils.data.Dataset):
                 aug_image = image * (1 - mask_l) + aug * mask_l
             # aug_image = image * (1 - mask_l) + (1 - beta) * aug * mask_l + beta * image * mask_l
 
-            # save_aug_image(aug_image, image_path.split('/')[-1])
+            save_aug_image(aug_image, image_path.split('/')[-1])
 #             cv2.imwrite(
 #     f"/home/phatnguyen/Documents/repo/base-glass/aug/mask_{image_path.split('/')[-1]}",
 #     (mask_l * 255).to(torch.uint8).cpu().numpy()
