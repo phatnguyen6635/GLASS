@@ -57,7 +57,7 @@ def apply_clahe(
     strong_aug: bool = False,
     more_light: bool = False,
     clip_limit: float = 2.0,
-    tile_grid_size: tuple[int, int] = (4, 4),
+    tile_grid_size: tuple[int, int] = (8, 8),
 ) -> np.ndarray:
     
     image_rgb = np.array(image_rgb)
@@ -240,8 +240,8 @@ class MVTecDataset(torch.utils.data.Dataset):
         image = PIL.Image.open(image_path).convert("RGB")
         # image = apply_clahe(image, mask=True)
         image = self.transform_img(image)
-        if anomaly != "good": 
-            save_aug_image(image, image_path.split('/')[-1])
+        # if anomaly != "good": 
+        #     save_aug_image(image, image_path.split('/')[-1])
 
         mask_fg = mask_s = aug_image = torch.tensor([1])
         if self.split == DatasetSplit.TRAIN:
@@ -277,7 +277,7 @@ class MVTecDataset(torch.utils.data.Dataset):
             "aug": aug_image,
             "mask_s": mask_s,
             "mask_gt": mask_gt,
-            "is_anomaly": int(anomaly != "good"),     
+            "is_anomaly": int(anomaly != "good"),
             "image_path": image_path,
         }
 
@@ -370,7 +370,7 @@ class MVTecDataset(torch.utils.data.Dataset):
 #  │    │          ├── 000.png
 #  │    │          └── 001.png
 #  │    ├── test
-#  │    │     ├── good
+#  │    │     ├── goodk
 #  │    │     └── crack
 #  │    │          ├── 000.png
 #  │    │          └── 001.png

@@ -332,6 +332,30 @@ class GLASS(torch.nn.Module):
                     
                 image_auroc, image_ap, pixel_auroc, pixel_ap, pixel_pro, tpr, tnr = self._evaluate(images, scores, segmentations,
                                                                                          labels_gt, masks_gt, name)
+                
+                cls_metrics = self.compute_metrics(
+                    scores=np.squeeze(np.array(scores)),
+                    labels_gt=labels_gt,
+                )
+
+                import csv
+                history_path = os.path.join(
+                    self.ckpt_dir, "tpr_tnr_accuracy_by_epoch.csv"
+                )
+                write_header = not os.path.exists(history_path)
+
+                with open(history_path, "a", newline="") as f:
+                    writer = csv.writer(f)
+
+                    if write_header:
+                        writer.writerow(["epoch", "TPR", "TNR", "Accuracy"])
+
+                    writer.writerow([
+                        epoch_number,
+                        f"{cls_metrics['tpr'] * 100:.2f}%",
+                        f"{cls_metrics['tnr'] * 100:.2f}%",
+                        f"{cls_metrics['accuracy'] * 100:.2f}%",
+                    ])
 
                 self.logger.logger.add_scalar("i-auroc", image_auroc, i_epoch)
                 self.logger.logger.add_scalar("i-ap", image_ap, i_epoch)
@@ -669,7 +693,7 @@ class GLASS(torch.nn.Module):
             mask = cv2.applyColorMap(mask, cv2.COLORMAP_JET)
             overlay = cv2.addWeighted(defect, 0.7, mask, 0.4, 0)
             img_up = np.hstack([defect, target, overlay])
-            img_up = cv2.resize(img_up, (256 * 3, 256))
+            img_up = cv2.resize(img_up, (576 * 3, 576))
             full_path = './results/' + path + '/' + name + '/'
             utils.del_remake_dir(full_path, del_flag=False)
             cv2.imwrite(full_path + str(i + 1).zfill(3) + '.png', img_up)

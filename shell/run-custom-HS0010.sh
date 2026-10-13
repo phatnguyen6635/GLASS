@@ -25,7 +25,9 @@ python main.py \
     --radius 0.75 \
     --p 0.5 \
     --step 20 \
-    --limit 1000 \
+    --limit 250 \
+    --backbone_train_start_epoch 50\
+    --train_backbone\
   dataset \
     --distribution 2 \
     --mean 0.5 \
@@ -34,7 +36,7 @@ python main.py \
     --hflip 0.5 \
     --vflip 0.5 \
     --rand_aug 1 \
-    --batch_size 8 \
+    --batch_size 4 \
     --resize 576 \
     --downsampling 8\
     --imagesize 576 "${flags[@]}" mvtec $datapath $augpath
