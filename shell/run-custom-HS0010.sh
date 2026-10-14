@@ -1,4 +1,4 @@
-datapath=/home/phatnguyen/Documents/data/glass/
+datapath=/home/avs/phatnguyen/data/glass/
 augpath=./datasets/dtd/images
 classes=('23')
 flags=($(for class in "${classes[@]}"; do echo '-d '"${class}"; done))
@@ -9,7 +9,7 @@ python main.py \
     --seed 0 \
     --test ckpt \
   net \
-    -b wideresnet101 \
+    -b wideresnet50 \
     -le layer2 \
     -le layer3  \
     --pretrain_embed_dimension 1536 \

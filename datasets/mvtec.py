@@ -34,6 +34,28 @@ _CLASSNAMES = [
 IMAGENET_MEAN = [0.485, 0.456, 0.406]
 IMAGENET_STD = [0.229, 0.224, 0.225]
 
+class RandomRotationReflect:
+    """Rotate a PIL image without black corners caused by affine padding."""
+
+    def __init__(self, degrees):
+        self.degrees = float(degrees)
+
+    def __call__(self, image):
+        angle = random.uniform(-self.degrees, self.degrees)
+        array = np.asarray(image)
+        height, width = array.shape[:2]
+        matrix = cv2.getRotationMatrix2D((width / 2, height / 2), angle, 1.0)
+        rotated = cv2.warpAffine(
+            array,
+            matrix,
+            (width, height),
+            flags=cv2.INTER_LINEAR,
+            # borderMode=cv2.BORDER_REFLECT_101,
+            borderMode=cv2.BORDER_CONSTANT,
+            borderValue=(0, 0, 0),
+        )
+        return PIL.Image.fromarray(rotated)
+    
 def save_aug_image(tensor_img, name):
     img = tensor_img.detach().cpu().clone()
 
@@ -55,48 +77,57 @@ def save_aug_image(tensor_img, name):
 
 
 def apply_clahe(
-    img,
-    clip_limit=5.0,
-    tile_grid_size=(8, 8)
-):
-    img = np.array(img)
-    # RGB -> LAB
-    lab = cv2.cvtColor(
-        img,
-        cv2.COLOR_RGB2LAB
-    )
+    image_rgb: np.ndarray,
+    mask: bool = True,
+    strong_aug: bool = False,
+    more_light: bool = False,
+    clip_limit: float = 3.0,
+    tile_grid_size: tuple[int, int] = (4, 4),
+) -> np.ndarray:
+    """
+    Áp dụng CLAHE cho ảnh OpenCV RGB và trả về ảnh RGB.
 
-    l, a, b = cv2.split(lab)
+    mask là mask YOLO tùy chọn. Nếu có, vùng ngoài mask được giữ nguyên
+    (thường là nền đen của ảnh đã segmentation).
+    """
     
-    gamma = 0.7
-
-    table = np.array([
-        ((i / 255.0) ** gamma) * 255
+    image_rgb = np.array(image_rgb)
+    
+    if strong_aug:
+        blur = cv2.GaussianBlur(image_rgb, (0,0), 15)
+        residual = cv2.subtract(image_rgb, blur)
+        enhanced = cv2.addWeighted(image_rgb, 1.15, residual, 0.35, 0)
+        enhanced = np.clip(enhanced, 0, 255).astype(np.uint8)
+        image_rgb = enhanced
+        
+    lab = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2LAB)
+    lightness, a_channel, b_channel = cv2.split(lab)
+    
+    if more_light:
+        table = np.array([
+        ((i / 255.0) ** 0.7) * 255
         for i in np.arange(0, 256)
     ]).astype("uint8")
+        lightness = cv2.LUT(lightness, table)
 
-    l = cv2.LUT(l, table)
-
-    # Create CLAHE
     clahe = cv2.createCLAHE(
-        clipLimit=clip_limit,
-        tileGridSize=tile_grid_size
+        clipLimit=float(clip_limit),
+        tileGridSize=tuple(tile_grid_size),
+    )
+    enhanced_lightness = clahe.apply(lightness)
+
+    output_rgb = cv2.cvtColor(
+        cv2.merge((enhanced_lightness, a_channel, b_channel)),
+        cv2.COLOR_LAB2RGB,
     )
 
-    # Apply on Lightness channel
-    cl = clahe.apply(l)
-
-    # Merge channels
-    merged = cv2.merge((cl, a, b))
-
-    # LAB -> RGB
-    clahe_img = cv2.cvtColor(
-        merged,
-        cv2.COLOR_LAB2RGB
-    )
-    
-    clahe_img = PIL.Image.fromarray(clahe_img)
-    return clahe_img
+    if mask:
+        mask = (image_rgb > 0).any(axis=2)
+        result = image_rgb.copy()
+        result[mask > 0] = output_rgb[mask > 0]
+        output_rgb = result
+        
+    return PIL.Image.fromarray(output_rgb)
 
 
 class DatasetSplit(Enum):
@@ -192,6 +223,7 @@ class MVTecDataset(torch.utils.data.Dataset):
             transforms.RandomHorizontalFlip(h_flip_p),
             transforms.RandomVerticalFlip(v_flip_p),
             transforms.RandomGrayscale(gray_p),
+            RandomRotationReflect(rotate_degrees),
             transforms.RandomAffine(rotate_degrees,
                                     translate=(translate, translate),
                                     scale=(1.0 - scale, 1.0 + scale),
@@ -252,30 +284,46 @@ class MVTecDataset(torch.utils.data.Dataset):
                 aug = self.transform_img(aug)
  
             if self.class_fg:
-                fgmask_path = image_path.split(classname)[0] + 'fg_mask/' + classname + '/' + os.path.split(image_path)[-1]
-                mask_fg = PIL.Image.open(fgmask_path)
-                mask_fg = torch.ceil(self.transform_mask(mask_fg)[0])
-            # check = torch.randn(1) >= 0.3
-            mask_all = perlin_mask(image.shape, self.imgsize // self.downsampling, 0, 6, mask_fg, 1)
-            # if check:
-            #     mask_all = perlin_mask(image.shape, self.imgsize // self.downsampling, 0, 6, mask_fg, 1)
-            # else:
-            #     mask_all = circle(image.shape, self.imgsize // self.downsampling, 1, 6, mask_fg)
+                # fgmask_path = image_path.split(classname)[0] + 'fg_mask/' + classname + '/' + os.path.split(image_path)[-1]
+                # mask_fg = PIL.Image.open(fgmask_path)
+                # mask_fg = torch.ceil(self.transform_mask(mask_fg)[0])
+
+                black = -torch.tensor(
+                IMAGENET_MEAN,  
+                dtype=image.dtype,
+                device=image.device
+            ).view(3, 1, 1) / torch.tensor(
+                IMAGENET_STD,
+                dtype=image.dtype,
+                device=image.device
+            ).view(3, 1, 1)
+
+                mask_fg = (~torch.isclose(
+                    image,
+                    black,
+                    atol=1e-5
+                )).any(dim=0).float()
             
+            check = torch.randn(1) <= 0.4
+            # mask_all = perlin_mask(image.shape, self.imgsize // self.downsampling, 0, 6, mask_fg, 1)
+            if check:
+                mask_all = perlin_mask(image.shape, self.imgsize // self.downsampling, 0, 6, mask_fg, 1)
+            else:
+                mask_all = circle(image.shape, self.imgsize // self.downsampling, 1, 6, mask_fg)
+
+            folder_aug = "/home/avs/phatnguyen/repo/GLASS/synthetic/anomaly/"
+            files = [f for f in os.listdir(folder_aug) if f.lower().endswith((".png"))]
+            random_file = random.choice(files)
+            img_path = os.path.join(folder_aug, random_file)
+            aug_ = PIL.Image.open(img_path).convert("RGB")
+            aug_ = self.transform_img(aug_)
+            aug = aug if check else aug_
+
             mask_s = torch.from_numpy(mask_all[0]) # [feat_size, feat_size]
             mask_l = torch.from_numpy(mask_all[1])
 
             beta = np.random.normal(loc=self.mean, scale=self.std)
             beta = np.clip(beta, .2, .8)
-            
-            # folder_aug = "/home/phatnguyen/Documents/repo/base-glass/synthetic/anomaly"
-            # files = [f for f in os.listdir(folder_aug) if f.lower().endswith((".png"))]
-            # random_file = random.choice(files)
-            # img_path = os.path.join(folder_aug, random_file)
-            # aug_ = PIL.Image.open(img_path).convert("RGB")
-            # aug_ = apply_clahe(aug_)
-            # aug_ = self.transform_img(aug_)
-            # aug = aug if check else aug_
             
             # if check:
             aug_image = image * (1 - mask_l) + (1 - beta) * aug * mask_l + beta * image * mask_l
