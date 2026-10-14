@@ -10,6 +10,8 @@ import PIL
 import torch
 import os
 import glob
+import random
+
 
 _CLASSNAMES = [
     "carpet",
@@ -31,6 +33,29 @@ _CLASSNAMES = [
 
 IMAGENET_MEAN = [0.485, 0.456, 0.406]
 IMAGENET_STD = [0.229, 0.224, 0.225]
+
+
+class RandomRotationReflect:
+    """Rotate a PIL image without black corners caused by affine padding."""
+
+    def __init__(self, degrees):
+        self.degrees = float(degrees)
+
+    def __call__(self, image):
+        angle = random.uniform(-self.degrees, self.degrees)
+        array = np.asarray(image)
+        height, width = array.shape[:2]
+        matrix = cv2.getRotationMatrix2D((width / 2, height / 2), angle, 1.0)
+        rotated = cv2.warpAffine(
+            array,
+            matrix,
+            (width, height),
+            flags=cv2.INTER_LINEAR,
+            # borderMode=cv2.BORDER_REFLECT_101,
+            borderMode=cv2.BORDER_CONSTANT,
+            borderValue=(0, 0, 0),
+        )
+        return PIL.Image.fromarray(rotated)
 
 def save_aug_image(tensor_img, name):
     img = tensor_img.detach().cpu().clone()
@@ -191,6 +216,7 @@ class MVTecDataset(torch.utils.data.Dataset):
             transforms.RandomHorizontalFlip(h_flip_p),
             transforms.RandomVerticalFlip(v_flip_p),
             transforms.RandomGrayscale(gray_p),
+            RandomRotationReflect(rotate_degrees),
             transforms.RandomAffine(rotate_degrees,
                                     translate=(translate, translate),
                                     scale=(1.0 - scale, 1.0 + scale),
@@ -242,8 +268,9 @@ class MVTecDataset(torch.utils.data.Dataset):
         image = self.transform_img(image)
         # if anomaly != "good": 
         #     save_aug_image(image, image_path.split('/')[-1])
-
+        
         mask_fg = mask_s = aug_image = torch.tensor([1])
+        
         if self.split == DatasetSplit.TRAIN:
             aug = PIL.Image.open(np.random.choice(self.anomaly_source_paths)).convert("RGB")
             # aug = apply_clahe(aug, mask=True)
@@ -254,18 +281,52 @@ class MVTecDataset(torch.utils.data.Dataset):
                 aug = self.transform_img(aug)
 
             if self.class_fg:
-                fgmask_path = image_path.split(classname)[0] + 'fg_mask/' + classname + '/' + os.path.split(image_path)[-1]
-                mask_fg = PIL.Image.open(fgmask_path)
-                mask_fg = torch.ceil(self.transform_mask(mask_fg)[0])
+                # fgmask_path = image_path.split(classname)[0] + 'fg_mask/' + classname + '/' + os.path.split(image_path)[-1]
+                # mask_fg = PIL.Image.open(fgmask_path)
+                # mask_fg = torch.ceil(self.transform_mask(mask_fg)[0])
+                
+                black = -torch.tensor(
+                IMAGENET_MEAN,
+                dtype=image.dtype,
+                device=image.device
+            ).view(3, 1, 1) / torch.tensor(
+                IMAGENET_STD,
+                dtype=image.dtype,
+                device=image.device
+            ).view(3, 1, 1)
 
+                mask_fg = (~torch.isclose(
+                    image,
+                    black,
+                    atol=1e-5
+                )).any(dim=0).float()
+
+            check = torch.randn(1) <= 0.4
+            
             mask_all = perlin_mask(image.shape, self.imgsize // self.downsampling, 0, 6, mask_fg, 1)
             mask_s = torch.from_numpy(mask_all[0]) # [feat_size, feat_size]
             mask_l = torch.from_numpy(mask_all[1]) # 
 
             beta = np.random.normal(loc=self.mean, scale=self.std)
             beta = np.clip(beta, .2, .8)
-            aug_image = image * (1 - mask_l) + (1 - beta) * aug * mask_l + beta * image * mask_l
+            
+            folder_aug = "/home/phatnguyen/Documents/repo/base-glass/synthetic/anomaly"
+            files = [f for f in os.listdir(folder_aug) if f.lower().endswith((".png"))]
+            random_file = random.choice(files)
+            img_path = os.path.join(folder_aug, random_file)
+            aug_ = PIL.Image.open(img_path).convert("RGB")
+            aug_ = apply_clahe(aug_)
+            aug_ = self.transform_img(aug_)
+            aug = aug if check else aug_
+                        
+            if check:
+                aug_image = image * (1 - mask_l) + (1 - beta) * aug * mask_l + beta * image * mask_l
+            else:
+                aug_image = image * (1 - mask_l) + aug * mask_l
 
+            # aug_image = image * (1 - mask_l) + (1 - beta) * aug * mask_l + beta * image * mask_l
+            save_aug_image(aug_image, image_path.split('/')[-1])
+            
         if self.split == DatasetSplit.TEST and mask_path is not None:
             mask_gt = PIL.Image.open(mask_path).convert('L') # convert to grayscale
             mask_gt = self.transform_mask(mask_gt)
