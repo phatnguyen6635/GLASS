@@ -275,13 +275,13 @@ class MVTecDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         classname, anomaly, image_path, mask_path = self.data_to_iterate[idx]
         image = PIL.Image.open(image_path).convert("RGB")
-        image = apply_clahe(image)
+        # image = apply_clahe(image)
         image = self.transform_img(image)
 
         mask_fg = mask_s = aug_image = torch.tensor([1])
         if self.split == DatasetSplit.TRAIN:
             aug = PIL.Image.open(np.random.choice(self.anomaly_source_paths)).convert("RGB")
-            aug =  apply_clahe(aug)
+            # aug =  apply_clahe(aug)
             if self.rand_aug:
                 transform_aug = self.rand_augmenter()
                 aug = transform_aug(aug)
@@ -325,7 +325,7 @@ class MVTecDataset(torch.utils.data.Dataset):
             random_file = random.choice(files)
             img_path = os.path.join(folder_aug, random_file)
             aug_ = PIL.Image.open(img_path).convert("RGB")
-            aug_ = apply_clahe(aug_)
+            # aug_ = apply_clahe(aug_)
             aug_ = self.transform_img(aug_)
             aug = aug if check else aug_
              

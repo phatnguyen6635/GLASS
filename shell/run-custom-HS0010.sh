@@ -26,7 +26,7 @@ python main.py \
     --p 0.5 \
     --step 20 \
     --limit 100 \
-    --backbone_train_start_epoch 80\
+    --backbone_train_start_epoch 60\
     --train_backbone\
   dataset \
     --distribution 2 \
