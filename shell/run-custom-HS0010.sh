@@ -26,11 +26,14 @@ python main.py \
     --p 0.5 \
     --step 20 \
     --limit 1000 \
+    --backbone_train_start_epoch 60\
+    --train_backbone\
   dataset \
     --distribution 2 \
     --mean 0.5 \
     --std 0.1 \
     --fg 1 \
+    --rotate_degrees 180\
     --rand_aug 1 \
     --batch_size 8 \
     --resize 576 \

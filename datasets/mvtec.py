@@ -325,10 +325,10 @@ class MVTecDataset(torch.utils.data.Dataset):
             beta = np.random.normal(loc=self.mean, scale=self.std)
             beta = np.clip(beta, .2, .8)
             
-            # if check:
-            aug_image = image * (1 - mask_l) + (1 - beta) * aug * mask_l + beta * image * mask_l
-            # else:
-            #     aug_image = image * (1 - mask_l) + aug * mask_l
+            if check:
+                aug_image = image * (1 - mask_l) + (1 - beta) * aug * mask_l + beta * image * mask_l
+            else:
+                aug_image = image * (1 - mask_l) + aug * mask_l
             # save_aug_image(aug_image, image_path.split('/')[-1])
 #             cv2.imwrite(
 #     f"/home/phatnguyen/Documents/repo/base-glass/aug/mask_{image_path.split('/')[-1]}",
