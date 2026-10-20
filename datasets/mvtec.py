@@ -315,7 +315,7 @@ class MVTecDataset(torch.utils.data.Dataset):
             random_file = random.choice(files)
             img_path = os.path.join(folder_aug, random_file)
             aug_ = PIL.Image.open(img_path).convert("RGB")
-            aug_ = apply_clahe(aug_)
+            # aug_ = apply_clahe(aug_)
             aug_ = self.transform_img(aug_)
             aug = aug if check else aug_
                         
@@ -325,7 +325,7 @@ class MVTecDataset(torch.utils.data.Dataset):
                 aug_image = image * (1 - mask_l) + aug * mask_l
 
             # aug_image = image * (1 - mask_l) + (1 - beta) * aug * mask_l + beta * image * mask_l
-            save_aug_image(aug_image, image_path.split('/')[-1])
+            # save_aug_image(aug_image, image_path.split('/')[-1])
             
         if self.split == DatasetSplit.TEST and mask_path is not None:
             mask_gt = PIL.Image.open(mask_path).convert('L') # convert to grayscale

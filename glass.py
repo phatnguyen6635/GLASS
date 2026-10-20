@@ -332,7 +332,7 @@ class GLASS(torch.nn.Module):
                     
                 image_auroc, image_ap, pixel_auroc, pixel_ap, pixel_pro, tpr, tnr = self._evaluate(images, scores, segmentations,
                                                                                          labels_gt, masks_gt, name)
-                
+                # Tính lại cùng các giá trị mà _evaluate ghi ra log
                 cls_metrics = self.compute_metrics(
                     scores=np.squeeze(np.array(scores)),
                     labels_gt=labels_gt,
@@ -356,7 +356,7 @@ class GLASS(torch.nn.Module):
                         f"{cls_metrics['tnr'] * 100:.2f}%",
                         f"{cls_metrics['accuracy'] * 100:.2f}%",
                     ])
-
+                    
                 self.logger.logger.add_scalar("i-auroc", image_auroc, i_epoch)
                 self.logger.logger.add_scalar("i-ap", image_ap, i_epoch)
                 self.logger.logger.add_scalar("p-auroc", pixel_auroc, i_epoch)
@@ -386,6 +386,7 @@ class GLASS(torch.nn.Module):
                     torch.save(state_dict, ckpt_path_best)
                     shutil.rmtree(eval_path, ignore_errors=True)
                     shutil.copytree(train_path, eval_path)
+
                 pbar_str1 = f" IAUC:{round(image_auroc * 100, 2)}({round(best_record[0] * 100, 2)})" \
                             f" IAP:{round(image_ap * 100, 2)}({round(best_record[1] * 100, 2)})" \
                             f" PAUC:{round(pixel_auroc * 100, 2)}({round(best_record[2] * 100, 2)})" \
@@ -588,7 +589,7 @@ class GLASS(torch.nn.Module):
 
         return pbar_str2, all_p_true_, all_p_fake_
 
-    def compute_metrics(self, scores, labels_gt, threshold=0.7):
+    def compute_metrics(self, scores, labels_gt, threshold=0.8):
         scores = np.array(scores)
         labels_gt = np.array(labels_gt)
 

@@ -15,7 +15,7 @@ python main.py \
     --pretrain_embed_dimension 1536 \
     --target_embed_dimension 1536 \
     --patchsize 3 \
-    --meta_epochs 200 \
+    --meta_epochs 600 \
     --eval_epochs 1 \
     --dsc_layers 2 \
     --dsc_hidden 1024 \
@@ -32,6 +32,7 @@ python main.py \
     --distribution 2 \
     --mean 0.5 \
     --std 0.1 \
+    --rotate_degrees 180\
     --fg 1 \
     --hflip 0.5 \
     --vflip 0.5 \
