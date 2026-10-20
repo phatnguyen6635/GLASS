@@ -1,6 +1,6 @@
-datapath=/home/avs/phatnguyen/data/glass/
+datapath=/home/phatnguyen/Documents/data/glass/
 augpath=./datasets/dtd/images
-classes=('23')
+classes=('22_pretrain')
 flags=($(for class in "${classes[@]}"; do echo '-d '"${class}"; done))
 
 cd ..
@@ -26,6 +26,8 @@ python main.py \
     --p 0.5 \
     --step 20 \
     --limit 1000 \
+    --backbone_train_start_epoch 0\
+    --train_backbone\
   dataset \
     --distribution 2 \
     --mean 0.5 \
@@ -34,7 +36,7 @@ python main.py \
     --rotate_degrees 180\
     --rand_aug 1 \
     --batch_size 8 \
-    --resize 576 \
+    --resize 288 \
     --downsampling 8\
-    --imagesize 576 "${flags[@]}" mvtec $datapath $augpath
+    --imagesize 288 "${flags[@]}" mvtec $datapath $augpath
     
