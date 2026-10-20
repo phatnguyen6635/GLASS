@@ -1,6 +1,6 @@
-datapath=/home/phatnguyen/Documents/data/glass/
+datapath=/home/avs/phatnguyen/data/glass/
 augpath=./datasets/dtd/images
-classes=('22')
+classes=('23')
 flags=($(for class in "${classes[@]}"; do echo '-d '"${class}"; done))
 
 cd ..
@@ -9,7 +9,7 @@ python main.py \
     --seed 0 \
     --test ckpt \
   net \
-    -b wideresnet101 \
+    -b wideresnet50 \
     -le layer2 \
     -le layer3  \
     --pretrain_embed_dimension 1536 \
@@ -31,9 +31,10 @@ python main.py \
     --mean 0.5 \
     --std 0.1 \
     --fg 1 \
+    --rotate_degrees 180\
     --rand_aug 1 \
     --batch_size 8 \
-    --resize 288 \
+    --resize 576 \
     --downsampling 8\
-    --imagesize 288 "${flags[@]}" mvtec $datapath $augpath
+    --imagesize 576 "${flags[@]}" mvtec $datapath $augpath
     
