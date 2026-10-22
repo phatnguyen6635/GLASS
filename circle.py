@@ -163,7 +163,7 @@ def circle(img_shape, feat_size, min_count, max_count, mask_fg):
 
     # Thin scratch thickness
     ring_width = builtins.max(1.0, outer_r - inner_r)
-    ratio = np.random.uniform(0.02, 0.07) 
+    ratio = np.random.uniform(0.03, 0.07) 
     thickness = int(np.clip(round(builtins.max(1.0, ring_width * ratio)), 1, 10))
     pad = thickness // 2 + 1
 

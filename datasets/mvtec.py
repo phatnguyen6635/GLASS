@@ -311,7 +311,7 @@ class MVTecDataset(torch.utils.data.Dataset):
             else:
                 mask_all = circle(image.shape, self.imgsize // self.downsampling, 1, 6, mask_fg)
 
-            folder_aug = "/home/avs/phatnguyen/repo/GLASS/synthetic/anomaly/"
+            folder_aug = "/home/phatnguyen/Documents/repo/base-glass/synthetic/anomaly/"
             files = [f for f in os.listdir(folder_aug) if f.lower().endswith((".png"))]
             random_file = random.choice(files)
             img_path = os.path.join(folder_aug, random_file)
