@@ -1,4 +1,4 @@
-datapath=/home/phatnguyen/Documents/data/glass/
+datapath=/home/avs/phatnguyen/data/glass/
 augpath=./datasets/dtd/images
 classes=('22_pretrain')
 flags=($(for class in "${classes[@]}"; do echo '-d '"${class}"; done))
@@ -26,7 +26,7 @@ python main.py \
     --p 0.5 \
     --step 20 \
     --limit 1000 \
-    --backbone_train_start_epoch 0\
+    --backbone_train_start_epoch 30\
     --train_backbone\
   dataset \
     --distribution 2 \
