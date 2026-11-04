@@ -304,7 +304,7 @@ class MVTecDataset(torch.utils.data.Dataset):
             if number <= 0.4:
                 mask_all = perlin_mask(image.shape, self.imgsize // self.downsampling, 0, 6, mask_fg, 1)
                 check = True
-            elif number <= 2:
+            elif number <= 1.5:
                 mask_all = circle(image.shape, self.imgsize // self.downsampling, 1, 6, mask_fg)
                 check = False
             else:
