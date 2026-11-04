@@ -1,6 +1,7 @@
 from torchvision import transforms
 from perlin import perlin_mask
 from circle import circle
+from bavia import burr_mask
 from enum import Enum
 
 import numpy as np
@@ -78,18 +79,12 @@ def save_aug_image(tensor_img, name):
 
 def apply_clahe(
     image_rgb: np.ndarray,
-    mask: bool = True,
+    mask: bool = True, 
     strong_aug: bool = False,
     more_light: bool = False,
     clip_limit: float = 3.0,
     tile_grid_size: tuple[int, int] = (4, 4),
 ) -> np.ndarray:
-    """
-    Áp dụng CLAHE cho ảnh OpenCV RGB và trả về ảnh RGB.
-
-    mask là mask YOLO tùy chọn. Nếu có, vùng ngoài mask được giữ nguyên
-    (thường là nền đen của ảnh đã segmentation).
-    """
     
     image_rgb = np.array(image_rgb)
     
@@ -304,12 +299,17 @@ class MVTecDataset(torch.utils.data.Dataset):
                     atol=1e-5
                 )).any(dim=0).float()
             
-            check = torch.randn(1) <= 0.4
+            number = torch.randn(1)
             # mask_all = perlin_mask(image.shape, self.imgsize // self.downsampling, 0, 6, mask_fg, 1)
-            if check:
+            if number <= 0.4:
                 mask_all = perlin_mask(image.shape, self.imgsize // self.downsampling, 0, 6, mask_fg, 1)
-            else:
+                check = True
+            elif number <= 2:
                 mask_all = circle(image.shape, self.imgsize // self.downsampling, 1, 6, mask_fg)
+                check = False
+            else:
+                mask_all = burr_mask(image.shape, self.imgsize // self.downsampling, mask_fg)
+                check = False
 
             folder_aug = "/home/phatnguyen/Documents/repo/base-glass/synthetic/anomaly/"
             files = [f for f in os.listdir(folder_aug) if f.lower().endswith((".png"))]
