@@ -13,7 +13,7 @@ def crop_and_resize(image_path):
     img_tensor = torch.from_numpy(img_np).permute(2, 0, 1).float()  # (C, H, W)
 
     # 3. Crop vùng cần lấy
-    x, y, w, h = 1499, 1455, 4, 4
+    x, y, w, h = 798, 624, 4, 4
     crop = img_tensor[:, y:y+h, x:x+w]  # (C, 20, 20)
 
     # 4. Resize lên 576x576
@@ -30,5 +30,5 @@ def crop_and_resize(image_path):
 
 # Test
 if __name__ == "__main__":
-    out_img = crop_and_resize("/home/phatnguyen/Documents/repo/base-glass/synthetic/hard/182_20260407T110810.710.png")
+    out_img = crop_and_resize("/home/phatnguyen/Documents/repo/base-glass/synthetic/hard/20260521T035141.440.png")
     out_img.save("output.png")
