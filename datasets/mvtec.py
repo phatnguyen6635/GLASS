@@ -53,41 +53,80 @@ def save_aug_image(tensor_img, name):
     image_path = os.path.join("/home/phatnguyen/Documents/repo/base-glass/aug", name)
     cv2.imwrite(image_path, cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
 
+class RandomRotationReflect:
+    """Rotate a PIL image without black corners caused by affine padding."""
+
+    def __init__(self, degrees):
+        self.degrees = float(degrees)
+
+    def __call__(self, image):
+        angle = random.uniform(-self.degrees, self.degrees)
+        array = np.asarray(image)
+        height, width = array.shape[:2]
+        matrix = cv2.getRotationMatrix2D((width / 2, height / 2), angle, 1.0)
+        rotated = cv2.warpAffine(
+            array,
+            matrix,
+            (width, height),
+            flags=cv2.INTER_LINEAR,
+            # borderMode=cv2.BORDER_REFLECT_101,
+            borderMode=cv2.BORDER_CONSTANT,
+            borderValue=(0, 0, 0),
+        )
+        return PIL.Image.fromarray(rotated)
 
 def apply_clahe(
-    img,
-    clip_limit=3,
-    tile_grid_size=(4, 4)
-):
-    img = np.array(img)
-    # RGB -> LAB
-    lab = cv2.cvtColor(
-        img,
-        cv2.COLOR_RGB2LAB
-    )
+    image_rgb: np.ndarray,
+    mask: bool = True,
+    strong_aug: bool = False,
+    more_light: bool = False,
+    clip_limit: float = 2.0,
+    tile_grid_size: tuple[int, int] = (8, 8),
+) -> np.ndarray:
+    """
+    Áp dụng CLAHE cho ảnh OpenCV RGB và trả về ảnh RGB.
 
-    l, a, b = cv2.split(lab)
-
-    # Create CLAHE
-    clahe = cv2.createCLAHE(
-        clipLimit=clip_limit,
-        tileGridSize=tile_grid_size
-    )
-
-    # Apply on Lightness channel
-    cl = clahe.apply(l)
-
-    # Merge channels
-    merged = cv2.merge((cl, a, b))
-
-    # LAB -> RGB
-    clahe_img = cv2.cvtColor(
-        merged,
-        cv2.COLOR_LAB2RGB
-    )
+    mask là mask YOLO tùy chọn. Nếu có, vùng ngoài mask được giữ nguyên
+    (thường là nền đen của ảnh đã segmentation).
+    """
     
-    clahe_img = PIL.Image.fromarray(clahe_img)
-    return clahe_img
+    image_rgb = np.array(image_rgb)
+    
+    if strong_aug:
+        blur = cv2.GaussianBlur(image_rgb, (0,0), 15)
+        residual = cv2.subtract(image_rgb, blur)
+        enhanced = cv2.addWeighted(image_rgb, 1.15, residual, 0.35, 0)
+        enhanced = np.clip(enhanced, 0, 255).astype(np.uint8)
+        image_rgb = enhanced
+        
+    lab = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2LAB)
+    lightness, a_channel, b_channel = cv2.split(lab)
+    
+    if more_light:
+        table = np.array([
+        ((i / 255.0) ** 0.7) * 255
+        for i in np.arange(0, 256)
+    ]).astype("uint8")
+        lightness = cv2.LUT(lightness, table)
+
+    clahe = cv2.createCLAHE(
+        clipLimit=float(clip_limit),
+        tileGridSize=tuple(tile_grid_size),
+    )
+    enhanced_lightness = clahe.apply(lightness)
+
+    output_rgb = cv2.cvtColor(
+        cv2.merge((enhanced_lightness, a_channel, b_channel)),
+        cv2.COLOR_LAB2RGB,
+    )
+
+    if mask:
+        mask = (image_rgb > 0).any(axis=2)
+        result = image_rgb.copy()
+        result[mask > 0] = output_rgb[mask > 0]
+        output_rgb = result
+        
+    return PIL.Image.fromarray(output_rgb)
 
 class DatasetSplit(Enum):
     TRAIN = "train"
@@ -182,6 +221,7 @@ class MVTecDataset(torch.utils.data.Dataset):
             transforms.RandomHorizontalFlip(h_flip_p),
             transforms.RandomVerticalFlip(v_flip_p),
             transforms.RandomGrayscale(gray_p),
+            RandomRotationReflect(rotate_degrees),
             transforms.RandomAffine(rotate_degrees,
                                     translate=(translate, translate),
                                     scale=(1.0 - scale, 1.0 + scale),
@@ -231,7 +271,6 @@ class MVTecDataset(torch.utils.data.Dataset):
         image = PIL.Image.open(image_path).convert("RGB")
         # image = apply_clahe(image)
         image = self.transform_img(image)
-        # save_aug_image(image,  image_path.split('/')[-1])
 
         mask_fg = mask_s = aug_image = torch.tensor([1])
         if self.split == DatasetSplit.TRAIN:
@@ -244,15 +283,32 @@ class MVTecDataset(torch.utils.data.Dataset):
                 aug = self.transform_img(aug)
 
             if self.class_fg:
-                fgmask_path = image_path.split(classname)[0] + 'fg_mask/' + classname + '/' + os.path.split(image_path)[-1]
-                mask_fg = PIL.Image.open(fgmask_path)
-                mask_fg = torch.ceil(self.transform_mask(mask_fg)[0])
-            check = torch.randn(1) >= 0.5
+                # fgmask_path = image_path.split(classname)[0] + 'fg_mask/' + classname + '/' + os.path.split(image_path)[-1]
+                # mask_fg = PIL.Image.open(fgmask_path)
+                # mask_fg = torch.ceil(self.transform_mask(mask_fg)[0])
+                black = -torch.tensor(
+                IMAGENET_MEAN,
+                dtype=image.dtype,
+                device=image.device
+            ).view(3, 1, 1) / torch.tensor(
+                IMAGENET_STD,
+                dtype=image.dtype,
+                device=image.device
+            ).view(3, 1, 1)
+
+                mask_fg = (~torch.isclose(
+                    image,
+                    black,
+                    atol=1e-5
+                )).any(dim=0).float()
+            
+            check = torch.randn(1) <= 0.4
+
             # if check:
-            mask_all = perlin_mask(image.shape, self.imgsize // self.downsampling, 0, 6, mask_fg, 1)
+            #     mask_all = perlin_mask(image.shape, self.imgsize // self.downsampling, 0, 6, mask_fg, 1)
             # else:
             #     mask_all = circle(image.shape, self.imgsize // self.downsampling, 1, 6, mask_fg)
-            
+            mask_all = perlin_mask(image.shape, self.imgsize // self.downsampling, 0, 6, mask_fg, 1)
             mask_s = torch.from_numpy(mask_all[0]) # [feat_size, feat_size]
             mask_l = torch.from_numpy(mask_all[1])
 
@@ -269,9 +325,10 @@ class MVTecDataset(torch.utils.data.Dataset):
             # aug = aug if check else aug_
             
             # if check:
-            aug_image = image * (1 - mask_l) + (1 - beta) * aug * mask_l + beta * image * mask_l
+            #     aug_image = image * (1 - mask_l) + (1 - beta) * aug * mask_l + beta * image * mask_l
             # else:
             #     aug_image = image * (1 - mask_l) + aug * mask_l
+            aug_image = image * (1 - mask_l) + (1 - beta) * aug * mask_l + beta * image * mask_l
             # save_aug_image(aug_image, image_path.split('/')[-1])
 #             cv2.imwrite(
 #     f"/home/phatnguyen/Documents/repo/base-glass/aug/mask_{image_path.split('/')[-1]}",
@@ -280,7 +337,6 @@ class MVTecDataset(torch.utils.data.Dataset):
         if self.split == DatasetSplit.TEST and mask_path is not None:
             mask_gt = PIL.Image.open(mask_path).convert('L') # convert to grayscale
             mask_gt = self.transform_mask(mask_gt)
-            # save_aug_image(image,  image_path.split('/')[-1])
         else:
             mask_gt = torch.zeros([1, *image.size()[1:]])
 
@@ -292,7 +348,7 @@ class MVTecDataset(torch.utils.data.Dataset):
             "is_anomaly": int(anomaly != "good"),
             "image_path": image_path, 
         }
- 
+
     def __len__(self):
         return len(self.data_to_iterate)
 
@@ -303,7 +359,7 @@ class MVTecDataset(torch.utils.data.Dataset):
         classpath = os.path.join(self.source, self.classname, self.split.value) # dataset/class_name/train
         maskpath = os.path.join(self.source, self.classname, "ground_truth") # dataset/class_name/ground_truth: mask anomaly
         anomaly_types = os.listdir(classpath) # good, crack, etc.
- 
+
         imgpaths_per_class[self.classname] = {}
         maskpaths_per_class[self.classname] = {}
 

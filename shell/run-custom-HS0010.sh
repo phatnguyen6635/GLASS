@@ -1,6 +1,6 @@
-datapath=/home/phatnguyen/Documents/data/glass/
+datapath=/home/avs/phatnguyen/data/glass/
 augpath=./datasets/dtd/images
-classes=('20')
+classes=('20_pretrain')
 flags=($(for class in "${classes[@]}"; do echo '-d '"${class}"; done))
 
 cd ..
@@ -9,13 +9,13 @@ python main.py \
     --seed 0 \
     --test ckpt \
   net \
-    -b wideresnet101 \
+    -b wideresnet50 \
     -le layer2 \
     -le layer3  \
     --pretrain_embed_dimension 1536 \
     --target_embed_dimension 1536 \
     --patchsize 3 \
-    --meta_epochs 300 \
+    --meta_epochs 200 \
     --eval_epochs 1 \
     --dsc_layers 2 \
     --dsc_hidden 1024 \
@@ -31,6 +31,7 @@ python main.py \
     --mean 0.5 \
     --std 0.1 \
     --fg 1 \
+    --rotate_degrees 180\
     --rand_aug 1 \
     --batch_size 8 \
     --resize 288 \
