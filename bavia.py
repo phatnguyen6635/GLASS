@@ -235,7 +235,7 @@ def burr_mask(
     num_particles=(3, 10),
     particle_radius=(20, 35),
     irregularity=(0.6, 1.4),
-    elongation=(0.7, 1.5),
+    elongation=(0.7, 6),
 ):
     """
     Return:

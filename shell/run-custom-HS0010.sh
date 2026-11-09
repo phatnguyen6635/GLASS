@@ -15,7 +15,7 @@ python main.py \
     --pretrain_embed_dimension 1536 \
     --target_embed_dimension 1536 \
     --patchsize 3 \
-    --meta_epochs 300 \
+    --meta_epochs 350 \
     --eval_epochs 1 \
     --dsc_layers 2 \
     --dsc_hidden 1024 \
@@ -26,7 +26,7 @@ python main.py \
     --p 0.5 \
     --step 20 \
     --limit 1000 \
-    --backbone_train_start_epoch 40\
+    --backbone_train_start_epoch 80\
     --train_backbone\
   dataset \
     --distribution 2 \
