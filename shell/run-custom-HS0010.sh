@@ -1,6 +1,6 @@
-datapath=/home/phatnguyen/Documents/data/glass/
+datapath=//home/phatnguyen/Documents/data/glass/
 augpath=./datasets/dtd/images
-classes=('16')
+classes=('16_pretrain')
 flags=($(for class in "${classes[@]}"; do echo '-d '"${class}"; done))
 
 cd ..
@@ -9,15 +9,15 @@ python main.py \
     --seed 0 \
     --test ckpt \
   net \
-    -b wideresnet101 \
+    -b wideresnet50 \
     -le layer2 \
-    -le layer3 \
+    -le layer3  \
     --pretrain_embed_dimension 1536 \
     --target_embed_dimension 1536 \
     --patchsize 3 \
-    --meta_epochs 640 \
+    --meta_epochs 350 \
     --eval_epochs 1 \
-    --dsc_layers 3 \
+    --dsc_layers 2 \
     --dsc_hidden 1024 \
     --pre_proj 1 \
     --mining 1 \
@@ -26,16 +26,17 @@ python main.py \
     --p 0.5 \
     --step 20 \
     --limit 1000 \
+    --backbone_train_start_epoch 80\
+    --train_backbone\
   dataset \
     --distribution 2 \
     --mean 0.5 \
     --std 0.1 \
     --fg 1 \
+    --rotate_degrees 180\
     --rand_aug 1 \
-    --batch_size 8 \
+    --batch_size 4 \
     --resize 576 \
-    --hflip 0.3\
-    --vflip 0.3\
     --downsampling 8\
     --imagesize 576 "${flags[@]}" mvtec $datapath $augpath
     

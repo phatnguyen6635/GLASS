@@ -25,7 +25,7 @@ def crop_and_resize(image_path):
     resized_np = resized.permute(1, 2, 0).clamp(0, 255).byte().numpy()
     resized_img = Image.fromarray(resized_np)
 
-    return resized_img
+    return resized_img                                                                                                                                                                                                                                                                                                                                                                                                                                                                             
 
 
 # Test
