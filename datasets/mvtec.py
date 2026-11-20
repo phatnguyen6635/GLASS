@@ -1,6 +1,7 @@
 from torchvision import transforms
 from perlin import perlin_mask
 from circle import circle
+from bavia import burr_mask
 from enum import Enum
 
 import numpy as np
@@ -34,25 +35,6 @@ _CLASSNAMES = [
 IMAGENET_MEAN = [0.485, 0.456, 0.406]
 IMAGENET_STD = [0.229, 0.224, 0.225]
 
-def save_aug_image(tensor_img, name):
-    img = tensor_img.detach().cpu().clone()
-
-    # CHW -> HWC
-    if img.ndim == 3:
-        img = img.permute(1, 2, 0)
-
-    img = img.numpy()
-
-    # de-normalize ImageNet
-    img = img * IMAGENET_STD + IMAGENET_MEAN
-
-    # clamp + convert
-    img = np.clip(img, 0, 1)
-    img = (img * 255).astype(np.uint8)
-
-    image_path = os.path.join("/home/phatnguyen/Documents/repo/base-glass/aug", name)
-    cv2.imwrite(image_path, cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
-
 class RandomRotationReflect:
     """Rotate a PIL image without black corners caused by affine padding."""
 
@@ -74,21 +56,35 @@ class RandomRotationReflect:
             borderValue=(0, 0, 0),
         )
         return PIL.Image.fromarray(rotated)
+    
+def save_aug_image(tensor_img, name):
+    img = tensor_img.detach().cpu().clone()
+
+    # CHW -> HWC
+    if img.ndim == 3:
+        img = img.permute(1, 2, 0)
+
+    img = img.numpy()
+
+    # de-normalize ImageNet
+    img = img * IMAGENET_STD + IMAGENET_MEAN
+
+    # clamp + convert
+    img = np.clip(img, 0, 1)
+    img = (img * 255).astype(np.uint8)
+
+    image_path = os.path.join("/home/phatnguyen/Documents/repo/base-glass/aug", name)
+    cv2.imwrite(image_path, cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
+
 
 def apply_clahe(
     image_rgb: np.ndarray,
-    mask: bool = True,
+    mask: bool = True, 
     strong_aug: bool = False,
     more_light: bool = False,
-    clip_limit: float = 2.0,
-    tile_grid_size: tuple[int, int] = (8, 8),
+    clip_limit: float = 3.0,
+    tile_grid_size: tuple[int, int] = (4, 4),
 ) -> np.ndarray:
-    """
-    Áp dụng CLAHE cho ảnh OpenCV RGB và trả về ảnh RGB.
-
-    mask là mask YOLO tùy chọn. Nếu có, vùng ngoài mask được giữ nguyên
-    (thường là nền đen của ảnh đã segmentation).
-    """
     
     image_rgb = np.array(image_rgb)
     
@@ -127,6 +123,7 @@ def apply_clahe(
         output_rgb = result
         
     return PIL.Image.fromarray(output_rgb)
+
 
 class DatasetSplit(Enum):
     TRAIN = "train"
@@ -200,7 +197,7 @@ class MVTecDataset(torch.utils.data.Dataset):
             self.resize = round(self.imgsize * 329 / 288)
 
         xlsx_path = './datasets/excel/' + self.dataset_name + '_distribution.xlsx'
-        if self.fg == 2:  # choose by file
+        if self.fg == 2:  # choose by file 
             try:
                 df = pd.read_excel(xlsx_path)
                 self.class_fg = df.loc[df['Class'] == self.dataset_name + '_' + classname, 'Foreground'].values[0]
@@ -271,7 +268,6 @@ class MVTecDataset(torch.utils.data.Dataset):
         image = PIL.Image.open(image_path).convert("RGB")
         # image = apply_clahe(image)
         image = self.transform_img(image)
-
         mask_fg = mask_s = aug_image = torch.tensor([1])
         if self.split == DatasetSplit.TRAIN:
             aug = PIL.Image.open(np.random.choice(self.anomaly_source_paths)).convert("RGB")
@@ -281,13 +277,14 @@ class MVTecDataset(torch.utils.data.Dataset):
                 aug = transform_aug(aug)
             else:
                 aug = self.transform_img(aug)
-
+ 
             if self.class_fg:
                 # fgmask_path = image_path.split(classname)[0] + 'fg_mask/' + classname + '/' + os.path.split(image_path)[-1]
                 # mask_fg = PIL.Image.open(fgmask_path)
                 # mask_fg = torch.ceil(self.transform_mask(mask_fg)[0])
+
                 black = -torch.tensor(
-                IMAGENET_MEAN,
+                IMAGENET_MEAN,  
                 dtype=image.dtype,
                 device=image.device
             ).view(3, 1, 1) / torch.tensor(
@@ -302,33 +299,36 @@ class MVTecDataset(torch.utils.data.Dataset):
                     atol=1e-5
                 )).any(dim=0).float()
             
-            check = torch.randn(1) <= 0.4
+            number = torch.randn(1)
+            # mask_all = perlin_mask(image.shape, self.imgsize // self.downsampling, 0, 6, mask_fg, 1)
+            if number <= 0.4:
+                mask_all = perlin_mask(image.shape, self.imgsize // self.downsampling, 0, 6, mask_fg, 1)
+                check = True
+            elif number <= 1.5:
+                mask_all = circle(image.shape, self.imgsize // self.downsampling, 1, 6, mask_fg)
+                check = False
+            else:
+                mask_all = burr_mask(image.shape, self.imgsize // self.downsampling, mask_fg)
+                check = False
 
-            # if check:
-            #     mask_all = perlin_mask(image.shape, self.imgsize // self.downsampling, 0, 6, mask_fg, 1)
-            # else:
-            #     mask_all = circle(image.shape, self.imgsize // self.downsampling, 1, 6, mask_fg)
-            mask_all = perlin_mask(image.shape, self.imgsize // self.downsampling, 0, 6, mask_fg, 1)
+            folder_aug = "/home/avs/phatnguyen/repo/GLASS/synthetic/anomaly"
+            files = [f for f in os.listdir(folder_aug) if f.lower().endswith((".png"))]
+            random_file = random.choice(files)
+            img_path = os.path.join(folder_aug, random_file)
+            aug_ = PIL.Image.open(img_path).convert("RGB")
+            aug_ = self.transform_img(aug_)
+            aug = aug if check else aug_
+
             mask_s = torch.from_numpy(mask_all[0]) # [feat_size, feat_size]
             mask_l = torch.from_numpy(mask_all[1])
 
             beta = np.random.normal(loc=self.mean, scale=self.std)
             beta = np.clip(beta, .2, .8)
             
-            # folder_aug = "/home/phatnguyen/Documents/repo/base-glass/synthetic/anomaly"
-            # files = [f for f in os.listdir(folder_aug) if f.lower().endswith((".png"))]
-            # random_file = random.choice(files)
-            # img_path = os.path.join(folder_aug, random_file)
-            # aug_ = PIL.Image.open(img_path).convert("RGB")
-            # aug_ = soft_residual_clahe(aug_)
-            # aug_ = self.transform_img(aug_)
-            # aug = aug if check else aug_
-            
-            # if check:
-            #     aug_image = image * (1 - mask_l) + (1 - beta) * aug * mask_l + beta * image * mask_l
-            # else:
-            #     aug_image = image * (1 - mask_l) + aug * mask_l
-            aug_image = image * (1 - mask_l) + (1 - beta) * aug * mask_l + beta * image * mask_l
+            if check:
+                aug_image = image * (1 - mask_l) + (1 - beta) * aug * mask_l + beta * image * mask_l
+            else:
+                aug_image = image * (1 - mask_l) + aug * mask_l
             # save_aug_image(aug_image, image_path.split('/')[-1])
 #             cv2.imwrite(
 #     f"/home/phatnguyen/Documents/repo/base-glass/aug/mask_{image_path.split('/')[-1]}",
@@ -337,6 +337,8 @@ class MVTecDataset(torch.utils.data.Dataset):
         if self.split == DatasetSplit.TEST and mask_path is not None:
             mask_gt = PIL.Image.open(mask_path).convert('L') # convert to grayscale
             mask_gt = self.transform_mask(mask_gt)
+            # if anomaly != "good":
+            #     save_aug_image(image, image_path.split('/')[-1])
         else:
             mask_gt = torch.zeros([1, *image.size()[1:]])
 

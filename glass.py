@@ -464,7 +464,7 @@ class GLASS(torch.nn.Module):
             gaus_feats = true_feats + noise
 
             center = self.c.repeat(img.shape[0], 1, 1) # (B, ref_w × ref_h ,target_dim)
-            center = center.reshape(-1, center.shape[-1]) # (B x ref_w × ref_h ,target_dim)
+            center = center.reshape(-1, center.shape[-1]) # (B x ref_w × ref_h ,t       arget_dim)
             true_points = torch.concat([fake_feats[mask_s_gt[:, 0] == 0], true_feats], dim=0) # (K + B x ref_w × ref_h ,target_dim); K < B x ref_w × ref_h
             c_t_points = torch.concat([center[mask_s_gt[:, 0] == 0], center], dim=0)  # (K + B x ref_w × ref_h ,target_dim); K < B x ref_w × ref_h
             dist_t = torch.norm(true_points - c_t_points, dim=1) # (K + B x ref_w × ref_h)

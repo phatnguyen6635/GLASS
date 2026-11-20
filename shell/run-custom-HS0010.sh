@@ -1,6 +1,6 @@
 datapath=/home/avs/phatnguyen/data/glass/
 augpath=./datasets/dtd/images
-classes=('20_pretrain')
+classes=('20')
 flags=($(for class in "${classes[@]}"; do echo '-d '"${class}"; done))
 
 cd ..
@@ -15,7 +15,7 @@ python main.py \
     --pretrain_embed_dimension 1536 \
     --target_embed_dimension 1536 \
     --patchsize 3 \
-    --meta_epochs 200 \
+    --meta_epochs 300 \
     --eval_epochs 1 \
     --dsc_layers 2 \
     --dsc_hidden 1024 \
@@ -37,4 +37,3 @@ python main.py \
     --resize 288 \
     --downsampling 8\
     --imagesize 288 "${flags[@]}" mvtec $datapath $augpath
-    
