@@ -264,7 +264,7 @@ class MVTecDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         classname, anomaly, image_path, mask_path = self.data_to_iterate[idx]
         image = PIL.Image.open(image_path).convert("RGB")
-        # image = apply_clahe(image, mask=True)
+        # image = apply_clahe(image, mask=True, more_light=True)
         image = self.transform_img(image)
         # if anomaly != "good": 
         #     save_aug_image(image, image_path.split('/')[-1])
@@ -273,7 +273,7 @@ class MVTecDataset(torch.utils.data.Dataset):
         
         if self.split == DatasetSplit.TRAIN:
             aug = PIL.Image.open(np.random.choice(self.anomaly_source_paths)).convert("RGB")
-            # aug = apply_clahe(aug, mask=True)
+            # aug = apply_clahe(aug, mask=True, more_light=True)
             if self.rand_aug:
                 transform_aug = self.rand_augmenter()
                 aug = transform_aug(aug)
@@ -310,22 +310,25 @@ class MVTecDataset(torch.utils.data.Dataset):
             beta = np.random.normal(loc=self.mean, scale=self.std)
             beta = np.clip(beta, .2, .8)
             
-            folder_aug = "/home/phatnguyen/Documents/repo/base-glass/synthetic/anomaly"
-            files = [f for f in os.listdir(folder_aug) if f.lower().endswith((".png"))]
-            random_file = random.choice(files)
-            img_path = os.path.join(folder_aug, random_file)
-            aug_ = PIL.Image.open(img_path).convert("RGB")
-            # aug_ = apply_clahe(aug_)
-            aug_ = self.transform_img(aug_)
-            aug = aug if check else aug_
-                        
-            if check:
-                aug_image = image * (1 - mask_l) + (1 - beta) * aug * mask_l + beta * image * mask_l
-            else:
-                aug_image = image * (1 - mask_l) + aug * mask_l
+            # folder_aug = "/home/phatnguyen/Documents/repo/base-glass/synthetic/anomaly"
+            # files = [f for f in os.listdir(folder_aug) if f.lower().endswith((".png"))]
+            # random_file = random.choice(files)
+            # img_path = os.path.join(folder_aug, random_file)
+            # aug_ = PIL.Image.open(img_path).convert("RGB")
+            # # aug_ = apply_clahe(aug_)
+            # aug_ = self.transform_img(aug_)
+            # aug = aug if check else aug_
+            
+            # if check:
+            #     aug_image = image * (1 - mask_l) + (1 - beta) * aug * mask_l + beta * image * mask_l
+            # else:
+            #     aug_image = image * (1 - mask_l) + aug * mask_l
 
-            # aug_image = image * (1 - mask_l) + (1 - beta) * aug * mask_l + beta * image * mask_l
+            aug_image = image * (1 - mask_l) + (1 - beta) * aug * mask_l + beta * image * mask_l
             # save_aug_image(aug_image, image_path.split('/')[-1])
+            # cv2.imwrite("/home/phatnguyen/Documents/repo/base-glass/mask_s/" + image_path.split('/')[-1], mask_s.numpy() * 255)
+            # cv2.imwrite("/home/phatnguyen/Documents/repo/base-glass/mask_l/" + image_path.split('/')[-1], mask_l.numpy() * 255)
+
             
         if self.split == DatasetSplit.TEST and mask_path is not None:
             mask_gt = PIL.Image.open(mask_path).convert('L') # convert to grayscale
@@ -378,7 +381,7 @@ class MVTecDataset(torch.utils.data.Dataset):
                     else:
                         data_tuple.append(None)
                     data_to_iterate.append(data_tuple)
-
+    
         return imgpaths_per_class, data_to_iterate
     
 # imgpaths_per_class = {

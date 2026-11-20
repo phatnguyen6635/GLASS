@@ -1,6 +1,6 @@
 datapath=/home/phatnguyen/Documents/data/glass/
 augpath=./datasets/dtd/images
-classes=('18_pretrain')
+classes=('18')
 flags=($(for class in "${classes[@]}"; do echo '-d '"${class}"; done))
 
 cd ..
@@ -15,7 +15,7 @@ python main.py \
     --pretrain_embed_dimension 1536 \
     --target_embed_dimension 1536 \
     --patchsize 3 \
-    --meta_epochs 600 \
+    --meta_epochs 300 \
     --eval_epochs 1 \
     --dsc_layers 2 \
     --dsc_hidden 1024 \
@@ -26,7 +26,7 @@ python main.py \
     --p 0.5 \
     --step 20 \
     --limit 250 \
-    --backbone_train_start_epoch 50\
+    --backbone_train_start_epoch 80\
     --train_backbone\
   dataset \
     --distribution 2 \
