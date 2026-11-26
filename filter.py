@@ -1,7 +1,7 @@
 import os
 
 # Thư mục chứa ảnh
-folder_path = r"/home/phatnguyen/Documents/data/glass/18_pretrain/train/good/"  # đổi thành đường dẫn của bạn
+folder_path = r"/home/phatnguyen/Documents/data/glass/16_pretrain/train/good/"  # đổi thành đường dẫn của bạn
 
 # Lấy danh sách file
 files = [
@@ -16,8 +16,8 @@ files.sort()
 for i, filename in enumerate(files, start=1):
     old_path = os.path.join(folder_path, filename)
 
-    new_filename = f"{i}_{filename}"
-    # new_filename = f"{filename.split('_')[-1]}"
+    # new_filename = f"{i}_{filename}"
+    new_filename = f"{filename.split('_')[-1]}"
 
     new_path = os.path.join(folder_path, new_filename)
 

@@ -261,17 +261,17 @@ class MVTecDataset(torch.utils.data.Dataset):
         ]
 
         transform_aug = transforms.Compose(transform_aug)
-        return transform_aug
+        return transform_aug 
 
     def __getitem__(self, idx):
         classname, anomaly, image_path, mask_path = self.data_to_iterate[idx]
         image = PIL.Image.open(image_path).convert("RGB")
-        image = apply_clahe(image, mask=True)
+        # image = apply_clahe(image, mask=True)
         image = self.transform_img(image)
         mask_fg = mask_s = aug_image = torch.tensor([1])
         if self.split == DatasetSplit.TRAIN:
             aug = PIL.Image.open(np.random.choice(self.anomaly_source_paths)).convert("RGB")
-            aug =  apply_clahe(aug, mask=True)
+            # aug =  apply_clahe(aug, mask=True)
             if self.rand_aug:
                 transform_aug = self.rand_augmenter()
                 aug = transform_aug(aug)
@@ -303,13 +303,11 @@ class MVTecDataset(torch.utils.data.Dataset):
             # mask_all = perlin_mask(image.shape, self.imgsize // self.downsampling, 0, 6, mask_fg, 1)
             if number <= 0.4:
                 mask_all = burr_mask(image.shape, self.imgsize // self.downsampling, mask_fg)
-                check = False
             elif number <= 1.5:
                 mask_all = perlin_mask(image.shape, self.imgsize // self.downsampling, 0, 6, mask_fg, 1)
-                check = True
             else:
                 mask_all = circle(image.shape, self.imgsize // self.downsampling, 1, 6, mask_fg)
-                check = False
+            # mask_all = burr_mask(image.shape, self.imgsize // self.downsampling, mask_fg)
 
             # folder_aug = "/home/phatnguyen/Documents/repo/base-glass/synthetic/anomaly/"
             # files = [f for f in os.listdir(folder_aug) if f.lower().endswith((".png"))]
@@ -381,7 +379,7 @@ class MVTecDataset(torch.utils.data.Dataset):
         data_to_iterate = []
         for classname in sorted(imgpaths_per_class.keys()):
             for anomaly in sorted(imgpaths_per_class[classname].keys()):
-                for i, image_path in enumerate(imgpaths_per_class[classname][anomaly]):
+                for i, image_path in enumerate(imgpaths_per_class[classname][anomaly]): 
                     data_tuple = [classname, anomaly, image_path]
                     if self.split == DatasetSplit.TEST and anomaly != "good":
                         data_tuple.append(maskpaths_per_class[classname][anomaly][i])
